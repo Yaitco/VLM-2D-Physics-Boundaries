@@ -1,0 +1,127 @@
+{
+  "output_dir": "dataset/abo_physics_val",
+  "listing_shards": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "max_samples": 240,
+  "selection_pool_multiplier": 5,
+  "min_known_properties": 4,
+  "max_per_product_type": 25,
+  "exclude_product_types": [
+    "CELLULAR_PHONE_CASE",
+    "PORTABLE_ELECTRONIC_DEVICE_COVER"
+  ],
+  "seed": 42,
+  "records_stats": {
+    "records_total": 92320,
+    "records_with_ids": 91950,
+    "records_with_image_rel": 91950,
+    "records_with_local_image": 91950,
+    "records_with_min_known": 35270,
+    "records_excluded_by_product_type": 20663
+  },
+  "num_candidates": 14607,
+  "num_candidates_dedup": 11614,
+  "num_selected_before_images": 1200,
+  "num_written": 240,
+  "image_stats": {
+    "downloaded": 396,
+    "copied_local": 1
+  },
+  "context_filter": {
+    "enabled": true,
+    "min_context_score": 0.08,
+    "max_border_white_ratio": 0.95
+  },
+  "context_stats": {
+    "kept_by_context": 254,
+    "filtered_by_context": 143
+  },
+  "context_score_avg": 0.18581942558079764,
+  "context_score_min": 0.0,
+  "context_score_max": 0.7419106853008269,
+  "mask_config": {
+    "generate_masks": true,
+    "mask_backend": "rembg",
+    "min_mask_area_ratio": 0.01,
+    "max_mask_area_ratio": 0.95
+  },
+  "mask_stats": {
+    "generated_rembg": 254,
+    "mask_area_out_of_range": 14
+  },
+  "pruned_files": {
+    "images_removed": 157,
+    "masks_removed": 14
+  },
+  "property_distributions": {
+    "material": {
+      "metal": 34,
+      "fabric": 79,
+      "wood": 25,
+      "plastic": 31,
+      "rubber": 10,
+      "glass": 8,
+      "paper": 8,
+      "stone": 44,
+      "ceramic": 1
+    },
+    "rigidity": {
+      "rigid": 142,
+      "soft": 79,
+      "flexible": 19
+    },
+    "transparency": {
+      "opaque": 231,
+      "transparent": 9
+    },
+    "surface": {
+      "smooth": 73,
+      "fuzzy": 36,
+      "mixed": 65,
+      "rough": 64,
+      "porous": 2
+    },
+    "fragility": {
+      "durable": 222,
+      "fragile": 18
+    }
+  },
+  "top_product_types": {
+    "SHOES": 30,
+    "HOME": 25,
+    "CHAIR": 23,
+    "HOME_FURNITURE_AND_DECOR": 18,
+    "HOME_BED_AND_BATH": 11,
+    "SOFA": 9,
+    "FINERING": 7,
+    "WALL_ART": 7,
+    "JANITORIAL_SUPPLY": 6,
+    "OTTOMAN": 5,
+    "RUG": 5,
+    "FINEEARRING": 4,
+    "SCREEN_PROTECTOR": 3,
+    "LIGHT_FIXTURE": 3,
+    "KITCHEN": 3,
+    "TABLE": 3,
+    "OUTDOOR_LIVING": 3,
+    "BASKET": 3,
+    "WRITING_BOARD": 2,
+    "JAR": 2
+  }
+}
