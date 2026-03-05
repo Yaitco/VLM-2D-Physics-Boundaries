@@ -18,7 +18,7 @@
     14,
     15
   ],
-  "max_samples": 240,
+  "max_samples": 50,
   "selection_pool_multiplier": 5,
   "min_known_properties": 4,
   "max_per_product_type": 25,
@@ -37,11 +37,10 @@
   },
   "num_candidates": 14607,
   "num_candidates_dedup": 11614,
-  "num_selected_before_images": 1200,
-  "num_written": 240,
+  "num_selected_before_images": 250,
+  "num_written": 50,
   "image_stats": {
-    "downloaded": 396,
-    "copied_local": 1
+    "downloaded": 89
   },
   "context_filter": {
     "enabled": true,
@@ -49,10 +48,10 @@
     "max_border_white_ratio": 0.95
   },
   "context_stats": {
-    "kept_by_context": 254,
-    "filtered_by_context": 143
+    "kept_by_context": 53,
+    "filtered_by_context": 36
   },
-  "context_score_avg": 0.18581942558079764,
+  "context_score_avg": 0.1901869531078106,
   "context_score_min": 0.0,
   "context_score_max": 0.7419106853008269,
   "mask_config": {
@@ -62,66 +61,62 @@
     "max_mask_area_ratio": 0.95
   },
   "mask_stats": {
-    "generated_rembg": 254,
-    "mask_area_out_of_range": 14
+    "generated_rembg": 53,
+    "mask_area_out_of_range": 3
   },
   "pruned_files": {
-    "images_removed": 157,
-    "masks_removed": 14
+    "images_removed": 39,
+    "masks_removed": 3
   },
   "property_distributions": {
     "material": {
-      "metal": 34,
-      "fabric": 79,
-      "wood": 25,
-      "plastic": 31,
-      "rubber": 10,
-      "glass": 8,
-      "paper": 8,
-      "stone": 44,
-      "ceramic": 1
+      "metal": 7,
+      "rubber": 3,
+      "plastic": 6,
+      "fabric": 18,
+      "stone": 10,
+      "paper": 3,
+      "wood": 3
     },
     "rigidity": {
-      "rigid": 142,
-      "soft": 79,
-      "flexible": 19
+      "rigid": 25,
+      "flexible": 7,
+      "soft": 18
     },
     "transparency": {
-      "opaque": 231,
-      "transparent": 9
+      "opaque": 50
     },
     "surface": {
-      "smooth": 73,
-      "fuzzy": 36,
-      "mixed": 65,
-      "rough": 64,
-      "porous": 2
+      "smooth": 13,
+      "fuzzy": 9,
+      "mixed": 16,
+      "rough": 12
     },
     "fragility": {
-      "durable": 222,
-      "fragile": 18
+      "durable": 46,
+      "fragile": 4
     }
   },
   "top_product_types": {
-    "SHOES": 30,
-    "HOME": 25,
-    "CHAIR": 23,
-    "HOME_FURNITURE_AND_DECOR": 18,
-    "HOME_BED_AND_BATH": 11,
-    "SOFA": 9,
-    "FINERING": 7,
-    "WALL_ART": 7,
-    "JANITORIAL_SUPPLY": 6,
-    "OTTOMAN": 5,
-    "RUG": 5,
-    "FINEEARRING": 4,
-    "SCREEN_PROTECTOR": 3,
-    "LIGHT_FIXTURE": 3,
-    "KITCHEN": 3,
-    "TABLE": 3,
-    "OUTDOOR_LIVING": 3,
-    "BASKET": 3,
-    "WRITING_BOARD": 2,
-    "JAR": 2
+    "SHOES": 8,
+    "HOME_FURNITURE_AND_DECOR": 6,
+    "CHAIR": 5,
+    "HOME": 4,
+    "HOME_BED_AND_BATH": 4,
+    "WALL_ART": 3,
+    "FINEEARRING": 2,
+    "AUTO_ACCESSORY": 1,
+    "SAFE": 1,
+    "PET_SUPPLIES": 1,
+    "FLATWARE": 1,
+    "HOME_LIGHTING_AND_LAMPS": 1,
+    "STORAGE_BOX": 1,
+    "FINERING": 1,
+    "BOOT": 1,
+    "BENCH": 1,
+    "SUITCASE": 1,
+    "JANITORIAL_SUPPLY": 1,
+    "ACCESSORY": 1,
+    "BREAKFAST_CEREAL": 1
   }
 }
