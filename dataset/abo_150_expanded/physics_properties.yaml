@@ -1,0 +1,1014 @@
+ontology_name: "physics_properties"
+description: >
+  Ontology of physical, state-dependent and affordance-related properties
+  of household objects and their parts, designed for robotic / VLA training.
+
+groups:
+  intrinsic:
+    title: "Intrinsic properties"
+    description: >
+      Material, geometric, mechanical, surface, optical, thermal,
+      electrical and other inherent physical properties of the object
+      or its parts, independent of the current scene state.
+    properties:
+
+      # MATERIAL
+      
+      main_material:
+        type: categorical
+        enum_ref: materials
+        scope: object_or_part
+        description: "Dominant visible material of the object or part."
+
+      secondary_materials:
+        type: list
+        items:
+          type: categorical
+          enum_ref: materials
+        scope: object_or_part
+        description: "Additional clearly visible materials."
+
+      state_of_matter:
+        type: categorical
+        enum_ref: state_of_matter
+        scope: object_or_part
+        description: "Physical state of the material."
+
+      granularity_type:
+        type: categorical
+        enum_ref: granularity_type
+        scope: object_or_part
+        description: "Whether the object consists of grains, pieces, droplets, etc."
+
+      porosity_class:
+        type: categorical
+        enum_ref: porosity_class
+        scope: material
+        description: "How porous the material is."
+
+      is_composite:
+        type: boolean
+        scope: object
+        description: "Whether the object is obviously made of multiple materials."
+
+      # GEOMETRY & SIZE
+
+      bbox_size_3d_m:
+        type: vector3
+        scope: object
+        description: "Approximate (width, height, depth) of the object bounding box in meters."
+
+      size_class:
+        type: categorical
+        enum_ref: size_class
+        scope: object
+        description: "Size of the object relative to a typical household scene."
+
+      shape_class:
+        type: categorical
+        enum_ref: shape_class
+        scope: object
+        description: "Coarse 3D shape of the object."
+
+      aspect_ratio:
+        type: vector3
+        scope: object
+        description: "Relative proportions of width, height and depth."
+
+      thickness_m:
+        type: float
+        scope: object_or_part
+        description: "Approximate thickness (for plates, walls, panels)."
+
+      is_hollow:
+        type: boolean
+        scope: object
+        description: "Whether the object is hollow (has significant internal volume)."
+
+      hollow_fraction:
+        type: float
+        range: [0.0, 1.0]
+        scope: object
+        description: "Fraction of internal volume that is empty (hollow)."
+
+      center_of_mass_rel:
+        type: vector3
+        scope: object
+        description: >
+          Approximate center of mass location relative to the bounding box,
+          in normalized coordinates [0,1]^3 (0.5,0.5,0.5 = center).
+
+      symmetry_axes:
+        type: list
+        items:
+          type: categorical
+          enum: [x, y, z, radial, none]
+        scope: object
+        description: "Approximate symmetry axes of the object."
+
+      # MASS & DENSITY
+
+      mass_kg:
+        type: float
+        scope: object
+        description: "Measured or estimated mass of the object in kilograms."
+
+      mass_class:
+        type: categorical
+        enum_ref: mass_class
+        scope: object
+        description: "Perceived mass category, accounting for size."
+
+      density_kg_per_m3:
+        type: float
+        scope: material
+        description: "Estimated bulk density of the material."
+
+      density_class:
+        type: categorical
+        enum_ref: density_class
+        scope: material
+        description: "Qualitative density category compared to common materials."
+
+      # MECHANICAL PROPERTIES
+
+      rigidity_class:
+        type: categorical
+        enum_ref: rigidity_class
+        scope: object_or_part
+        description: "Resistance to bending under moderate force."
+
+      elasticity_class:
+        type: categorical
+        enum: [non_elastic, slightly_elastic, elastic, highly_elastic, unknown]
+        scope: object_or_part
+        description: "How well the object returns to its original shape after deformation."
+
+      plasticity_class:
+        type: categorical
+        enum: [non_plastic, slightly_plastic, plastic, highly_plastic, unknown]
+        scope: object_or_part
+        description: "How likely permanent deformation is after applying force."
+
+      compressibility_class:
+        type: categorical
+        enum: [incompressible, low, medium, high, unknown]
+        scope: object_or_part
+        description: "How much the object can be compressed by hand."
+
+      brittleness_class:
+        type: categorical
+        enum_ref: brittleness_class
+        scope: object_or_part
+        description: "Likelihood to fracture or shatter when stressed."
+
+      toughness_class:
+        type: categorical
+        enum: [very_low, low, medium, high, very_high, unknown]
+        scope: material
+        description: "Resistance to fracture when a crack is present."
+
+      viscosity_class:
+        type: categorical
+        enum_ref: viscosity_class
+        scope: material
+        description: "For liquids: resistance to flow."
+
+      restitution_coefficient:
+        type: float
+        range: [0.0, 1.0]
+        scope: object
+        description: "Bounciness, coefficient of restitution for typical impacts."
+
+      friction_coefficient_static:
+        type: float
+        scope: surface
+        description: "Estimated static friction coefficient against a reference surface."
+
+      friction_coefficient_dynamic:
+        type: float
+        scope: surface
+        description: "Estimated kinetic friction coefficient."
+
+      friction_class:
+        type: categorical
+        enum_ref: friction_class
+        scope: surface
+        description: "Qualitative friction level against a typical dry fabric or hand."
+
+      # SURFACE & TEXTURE
+
+      surface_roughness_class:
+        type: categorical
+        enum_ref: roughness_class
+        scope: surface
+        description: "Visual/tactile roughness of the surface."
+
+      texture_pattern:
+        type: categorical
+        enum:
+          - none
+          - striped
+          - checkered
+          - dotted
+          - woven
+          - furry
+          - ribbed
+          - pebbled
+          - wood_grain
+          - stone_pattern
+          - brushed
+          - patterned_other
+          - unknown
+        scope: surface
+        description: "Dominant texture pattern visible on the surface."
+
+      hardness_class:
+        type: categorical
+        enum_ref: hardness_class
+        scope: surface
+        description: "Perceived hardness of the surface when pressed."
+
+      softness_class:
+        type: categorical
+        enum: [very_soft, soft, medium, firm, hard, unknown]
+        scope: surface
+        description: "Perceived softness at touch."
+
+      has_sharp_edges:
+        type: boolean
+        scope: object_or_part
+        description: "Whether any edges appear sharp enough to cut or scratch."
+
+      edge_sharpness_class:
+        type: categorical
+        enum: [none, blunt, slightly_sharp, sharp, razor_sharp, unknown]
+        scope: object_or_part
+        description: "Qualitative sharpness of edges."
+
+      stickiness_class:
+        type: categorical
+        enum: [non_sticky, slightly_sticky, sticky, very_sticky, unknown]
+        scope: surface
+        description: "Tendency to adhere to other surfaces (e.g., tape, glue)."
+
+      # OPTICAL PROPERTIES
+
+      dominant_color_rgb:
+        type: vector3
+        scope: surface
+        description: "Dominant surface color as (R,G,B) in [0,255]."
+
+      color_palette_rgb:
+        type: list
+        items:
+          type: vector3
+        scope: surface
+        description: "List of key colors present on the surface."
+
+      brightness_albedo:
+        type: float
+        range: [0.0, 1.0]
+        scope: surface
+        description: "Relative reflectance / brightness under uniform lighting."
+
+      glossiness_class:
+        type: categorical
+        enum_ref: glossiness_class
+        scope: surface
+        description: "Amount of specular reflection (matte vs glossy)."
+
+      metallic_appearance:
+        type: boolean
+        scope: surface
+        description: "Whether the surface visually appears metallic."
+
+      transparency_class:
+        type: categorical
+        enum_ref: transparency_class
+        scope: object_or_part
+        description: "Ability to see through the object or part."
+
+      reflectivity_class:
+        type: categorical
+        enum: [very_low, low, medium, high, mirror_like, unknown]
+        scope: surface
+        description: "How strongly the surface reflects its environment."
+
+      subsurface_scattering:
+        type: boolean
+        scope: material
+        description: "Whether light penetrates and scatters beneath the surface (e.g., skin, wax)."
+
+      emissive_light_source:
+        type: boolean
+        scope: object
+        description: "Whether the object emits visible light (screen, bulb, LED)."
+
+      # THERMAL & CHEMICAL PROPERTIES
+
+      thermal_conductivity_class:
+        type: categorical
+        enum_ref: thermal_conductivity_class
+        scope: material
+        description: "How fast the material equalizes in temperature with the environment."
+
+      heat_capacity_class:
+        type: categorical
+        enum: [very_low, low, medium, high, very_high, unknown]
+        scope: material
+        description: "How much heat the material stores per unit mass."
+
+      heat_resistance_class:
+        type: categorical
+        enum: [very_low, low, medium, high, very_high, unknown]
+        scope: object_or_part
+        description: "Ability to withstand high temperatures without damage."
+
+      flammability_class:
+        type: categorical
+        enum_ref: flammability_class
+        scope: material
+        description: "Ease with which the material can catch fire."
+
+      water_resistance_class:
+        type: categorical
+        enum: [waterproof, water_resistant, absorbent, unknown]
+        scope: material
+        description: "Interaction with water (repelling, resisting, absorbing)."
+
+      corrosion_susceptibility_class:
+        type: categorical
+        enum: [non_corrosive, low, medium, high, unknown]
+        scope: material
+        description: "Likelihood to corrode or rust over time."
+
+      food_safe:
+        type: boolean
+        scope: object
+        description: "Whether the object is safe for direct contact with food."
+
+      toxicity_class:
+        type: categorical
+        enum: [non_toxic, low, medium, high, unknown]
+        scope: material
+        description: "Potential toxicity if ingested or inhaled."
+
+      # ELECTRICAL & MAGNETIC PROPERTIES
+
+      electrical_conductivity_class:
+        type: categorical
+        enum: [insulator, semiconductive, conductive, unknown]
+        scope: material
+        description: "Ability to conduct electricity."
+
+      has_internal_power_source:
+        type: boolean
+        scope: object
+        description: "Whether the object contains a battery or other internal power source."
+
+      is_electronic_device:
+        type: boolean
+        scope: object
+        description: "Whether the object is an electronic appliance or device."
+
+      magnetic_class:
+        type: categorical
+        enum: [non_magnetic, weakly_magnetic, strongly_magnetic, unknown]
+        scope: object_or_part
+        description: "Interaction with magnets."
+
+      electrostatic_charge_tendency:
+        type: categorical
+        enum: [low, medium, high, unknown]
+        scope: material
+        description: "How easily the material builds up static charge."
+
+  state:
+    title: "State properties"
+    description: >
+      Properties that describe the current state, pose, integrity,
+      articulation, filling, cleanliness and thermal state of an object
+      within a scene.
+    properties:
+
+      # POSE & MOTION
+
+      position_3d_m:
+        type: vector3
+        scope: object
+        description: "Current position of the object in world coordinates (meters)."
+
+      orientation_quat:
+        type: vector4
+        scope: object
+        description: "Current orientation of the object as a quaternion."
+
+      linear_velocity_m_per_s:
+        type: vector3
+        scope: object
+        description: "Current linear velocity of the object."
+
+      angular_velocity_rad_per_s:
+        type: vector3
+        scope: object
+        description: "Current angular velocity of the object."
+
+      is_moving:
+        type: boolean
+        scope: object
+        description: "Whether the object is currently in motion."
+
+      is_supported:
+        type: boolean
+        scope: object
+        description: "Whether the object is resting on another surface (not falling)."
+
+      # INTEGRITY & DAMAGE
+
+      is_intact:
+        type: boolean
+        scope: object
+        description: "Whether the object appears structurally intact."
+
+      damage_level_class:
+        type: categorical
+        enum: [none, slight, moderate, heavy, destroyed, unknown]
+        scope: object
+        description: "Amount of visible damage."
+
+      is_broken:
+        type: boolean
+        scope: object
+        description: "Whether the object is clearly broken into pieces."
+
+      has_visible_cracks:
+        type: boolean
+        scope: object
+        description: "Whether cracks are visible on the object."
+
+      is_dented:
+        type: boolean
+        scope: object
+        description: "Whether dents or deformations are visible."
+
+      # ARTICULATION & OPEN/CLOSED
+
+      openable:
+        type: boolean
+        scope: object
+        description: "Whether the object has a lid, door or similar that can be opened."
+
+      is_open:
+        type: boolean
+        scope: object
+        description: "Current open/closed state of the object."
+
+      openness_fraction:
+        type: float
+        range: [0.0, 1.0]
+        scope: object
+        description: "For openable objects: how open it is (0=closed, 1=fully open)."
+
+      lockable:
+        type: boolean
+        scope: object
+        description: "Whether the object can be locked."
+
+      is_locked:
+        type: boolean
+        scope: object
+        description: "Whether the object is currently locked."
+
+      # CONTAINMENT & FILL LEVEL
+
+      is_receptacle:
+        type: boolean
+        scope: object
+        description: "Can the object contain other objects or liquids?"
+
+      fill_level_fraction:
+        type: float
+        range: [0.0, 1.0]
+        scope: object
+        description: "Estimated fraction of internal volume that is filled."
+
+      fill_state_class:
+        type: categorical
+        enum: [empty, almost_empty, half_full, almost_full, full, unknown]
+        scope: object
+        description: "Coarse category of fill level."
+
+      content_type:
+        type: categorical
+        enum: [none, water, other_liquid, food_solid, non_food_solid, mixed, unknown]
+        scope: object
+        description: "Type of content if the object is a container."
+
+      content_homogeneity_class:
+        type: categorical
+        enum: [homogeneous, layered, mixed_chunks, unknown]
+        scope: object
+        description: "Whether the content appears uniform or heterogeneous."
+
+      # CLEANLINESS & WEAR
+
+      dirtyable:
+        type: boolean
+        scope: object_or_part
+        description: "Whether the object can reasonably become dirty (e.g., clothing, dishes)."
+
+      is_dirty:
+        type: boolean
+        scope: object_or_part
+        description: "Whether the object appears visibly dirty right now."
+
+      dirt_type:
+        type: categorical
+        enum: [none, dust, stains, food_residue, rust, mud, unknown]
+        scope: object_or_part
+        description: "Dominant type of visible dirt."
+
+      wear_level:
+        type: categorical
+        enum_ref: wear_level
+        scope: object
+        description: "Visible wear and tear level."
+
+      # THERMAL STATE
+
+      object_temperature_class:
+        type: categorical
+        enum_ref: object_temperature_class
+        scope: object
+        description: "Current temperature of the object relative to room temperature."
+
+      surface_temperature_celsius:
+        type: float
+        scope: object
+        description: "Estimated surface temperature in degrees Celsius."
+
+      is_heating:
+        type: boolean
+        scope: object
+        description: "Whether the object is currently being heated."
+
+      is_cooling:
+        type: boolean
+        scope: object
+        description: "Whether the object is currently cooling down."
+
+      # ATTACHMENT / SUPPORT STATE
+
+      is_fixed_to_world:
+        type: boolean
+        scope: object
+        description: "Whether the object is permanently fixed (wall, floor, built-in)."
+
+      is_attached_to_other_object:
+        type: boolean
+        scope: object
+        description: "Whether the object is mechanically attached to another object."
+
+      attached_to_object_id:
+        type: integer
+        scope: object
+        description: "ID of the object this one is attached to (if any)."
+
+      # POWER / CONTROL STATE
+
+      toggleable:
+        type: boolean
+        scope: object
+        description: "Whether the object has an on/off-like toggle state."
+
+      is_toggled_on:
+        type: boolean
+        scope: object
+        description: "Whether the object is currently in the 'on' state."
+
+      is_plugged_in:
+        type: boolean
+        scope: object
+        description: "Whether the object is connected to mains power."
+
+      battery_level_fraction:
+        type: float
+        range: [0.0, 1.0]
+        scope: object
+        description: "Estimated fraction of remaining battery charge."
+
+      network_connected:
+        type: boolean
+        scope: object
+        description: "Whether the device appears to be connected (Wi-Fi, Ethernet, etc.)."
+
+  affordance:
+    title: "Affordance properties"
+    description: >
+      What actions an embodied agent can reasonably perform with the object,
+      and what roles the object can play in typical manipulation tasks.
+    properties:
+
+      # MANIPULATION AFFORDANCES
+
+      pickupable:
+        type: boolean
+        scope: object
+        description: "Can a typical human hand pick up this object as a whole?"
+
+      movable_by_push:
+        type: boolean
+        scope: object
+        description: "Can the object be moved by pushing it along a surface?"
+
+      movable_by_pull:
+        type: boolean
+        scope: object
+        description: "Can the object be moved by pulling it with a grasp?"
+
+      rollable:
+        type: boolean
+        scope: object
+        description: "Will the object naturally roll when pushed (e.g., ball)?"
+
+      slidable:
+        type: boolean
+        scope: object
+        description: "Can the object slide easily on a typical surface?"
+
+      stackable_on_top:
+        type: boolean
+        scope: object
+        description: "Can other copies of this object be stacked on top of it?"
+
+      can_be_stacked_on:
+        type: boolean
+        scope: object
+        description: "Can this object be placed on top of similar objects stably?"
+
+      hangable:
+        type: boolean
+        scope: object
+        description: "Can the object be hung (by hook, loop, handle)?"
+
+      grasp_points_count:
+        type: integer
+        scope: object
+        description: "Approximate number of distinct natural grasp points (handles, grips)."
+
+      # CONTAINER / SUPPORT AFFORDANCES
+
+      receptacle:
+        type: boolean
+        scope: object
+        description: "Can the object contain other objects or liquids?"
+
+      support_surface:
+        type: boolean
+        scope: object
+        description: "Can other objects be placed stably on top of this object?"
+
+      max_supported_weight_class:
+        type: categorical
+        enum_ref: mass_class
+        scope: object
+        description: "Approximate maximum weight category the object can support safely."
+
+      can_be_sat_on:
+        type: boolean
+        scope: object
+        description: "Can a person sit on this object (chair, sofa, bench)?"
+
+      can_be_stood_on:
+        type: boolean
+        scope: object
+        description: "Can a person stand on this object (stool, step)?"
+
+      # TRANSFORMATION / TOOL AFFORDANCES 
+
+      sliceable:
+        type: boolean
+        scope: object
+        description: "Can the object be sliced into pieces with a typical kitchen knife?"
+
+      breakable:
+        type: boolean
+        scope: object
+        description: "Is the object likely to break/shatter when dropped or hit?"
+
+      deformable_by_hand:
+        type: boolean
+        scope: object
+        description: "Can a human deform or bend the object by hand without tools?"
+
+      foldable:
+        type: boolean
+        scope: object
+        description: "Can the object be folded (cloth, paper, cardboard)?"
+
+      crumplable:
+        type: boolean
+        scope: object
+        description: "Can the object be crumpled into a ball shape (paper, foil)?"
+
+      cutting_tool:
+        type: boolean
+        scope: object
+        description: "Can the object be used to cut other objects (knife, scissors)?"
+
+      hammer_like:
+        type: boolean
+        scope: object
+        description: "Can the object be used like a hammer to hit things?"
+
+      scoop_like:
+        type: boolean
+        scope: object
+        description: "Can the object be used to scoop granular or liquid materials?"
+
+      wiping_tool:
+        type: boolean
+        scope: object
+        description: "Can the object be used to wipe or clean surfaces?"
+
+      writing_tool:
+        type: boolean
+        scope: object
+        description: "Can the object be used to write or draw (pen, marker, chalk)?"
+
+      # FLUID & FOOD AFFORDANCES
+
+      fillable_with_liquid:
+        type: boolean
+        scope: object
+        description: "Can the object hold liquids without leaking under normal use?"
+
+      pourable:
+        type: boolean
+        scope: object
+        description: "Can the contents of the object be poured out in a controlled way?"
+
+      drinkable_from:
+        type: boolean
+        scope: object
+        description: "Is the object suitable to drink directly from (cup, bottle)?"
+
+      edible:
+        type: boolean
+        scope: object
+        description: "Is the object itself food and can reasonably be eaten?"
+
+      cookable:
+        type: boolean
+        scope: object
+        description: "Can the food object be cooked (baked, boiled, fried)?"
+
+      freezable:
+        type: boolean
+        scope: object
+        description: "Can the content be frozen without destroying the container?"
+
+      microwavable:
+        type: boolean
+        scope: object
+        description: "Is the object safe for microwave use?"
+
+      dishwasher_safe:
+        type: boolean
+        scope: object
+        description: "Is the object safe to clean in a dishwasher?"
+
+      # CONTROL / APPLIANCE AFFORDANCES
+
+      toggleable:
+        type: boolean
+        scope: object
+        description: "Does the object afford on/off or similar toggling?"
+
+      has_discrete_control_states:
+        type: boolean
+        scope: object
+        description: "Does the object have discrete settings (e.g., burner levels)?"
+
+      ui_controls_present:
+        type: boolean
+        scope: object
+        description: "Does the object have visible controls (buttons, knobs, sliders)?"
+
+      child_lock_present:
+        type: boolean
+        scope: object
+        description: "Does the object provide a child safety lock?"
+
+      # SAFETY & RISK AFFORDANCES
+
+      sharp_dangerous:
+        type: boolean
+        scope: object
+        description: "Can the object easily cut skin or cause injury?"
+
+      pinch_risk:
+        type: boolean
+        scope: object
+        description: "Can the object pinch fingers when operated or moved?"
+
+      burn_risk:
+        type: boolean
+        scope: object
+        description: "Does the object pose a risk of burns when hot?"
+
+      electrical_risk:
+        type: boolean
+        scope: object
+        description: "Does the object pose electrical shock risk if mishandled?"
+
+      choking_hazard_for_children:
+        type: boolean
+        scope: object
+        description: "Is the object small enough or shaped such that it poses a choking hazard?"
+
+      # REGULATORY / RECYCLING (OPTIONAL)
+
+      recycling_category:
+        type: categorical
+        enum: [paper, plastic, glass, metal, organic, e_waste, mixed, other, unknown]
+        scope: object
+        description: "Recycling category in typical municipal systems."
+
+      allowed_in_carry_on_luggage:
+        type: boolean
+        scope: object
+        description: "Is the object generally allowed in carry-on luggage (rough guideline)?"
+
+# ENUM DEFINITIONS
+
+enums:
+  materials:
+    - wood
+    - metal
+    - glass
+    - ceramic
+    - stone
+    - plastic
+    - fabric
+    - rubber
+    - paper
+    - cardboard
+    - leather
+    - food
+    - liquid
+    - foam
+    - sponge
+    - wax
+    - organic
+    - composite
+    - unknown
+
+  state_of_matter:
+    - solid
+    - liquid
+    - gas
+    - granular
+    - powder
+    - gel
+    - foam
+    - unknown
+
+  granularity_type:
+    - continuous_solid
+    - discrete_pieces
+    - grains
+    - droplets
+    - flakes
+    - unknown
+
+  porosity_class:
+    - non_porous
+    - low
+    - medium
+    - high
+    - unknown
+
+  size_class:
+    - tiny
+    - small
+    - medium
+    - large
+    - very_large
+    - unknown
+
+  shape_class:
+    - flat_plate
+    - box_like
+    - cylinder
+    - sphere
+    - cone
+    - torus
+    - elongated_rod
+    - bowl_like
+    - irregular
+    - other
+    - unknown
+
+  mass_class:
+    - very_light
+    - light
+    - medium
+    - heavy
+    - very_heavy
+    - unknown
+
+  density_class:
+    - very_low
+    - low
+    - medium
+    - high
+    - very_high
+    - unknown
+
+  rigidity_class:
+    - floppy
+    - flexible
+    - semi_rigid
+    - rigid
+    - unknown
+
+  hardness_class:
+    - very_soft
+    - soft
+    - medium
+    - hard
+    - very_hard
+    - unknown
+
+  brittleness_class:
+    - non_brittle
+    - slightly_brittle
+    - brittle
+    - very_brittle
+    - unknown
+
+  viscosity_class:
+    - very_low
+    - low
+    - medium
+    - high
+    - very_high
+    - unknown
+
+  friction_class:
+    - slippery
+    - normal
+    - high
+    - sticky
+    - unknown
+
+  roughness_class:
+    - very_smooth
+    - smooth
+    - medium
+    - rough
+    - very_rough
+    - unknown
+
+  glossiness_class:
+    - matte
+    - semi_glossy
+    - glossy
+    - mirror_like
+    - unknown
+
+  transparency_class:
+    - opaque
+    - translucent
+    - transparent
+    - unknown
+
+  thermal_conductivity_class:
+    - insulator
+    - low
+    - medium
+    - high
+    - unknown
+
+  flammability_class:
+    - non_flammable
+    - low
+    - medium
+    - high
+    - unknown
+
+  object_temperature_class:
+    - cold
+    - room_temp
+    - warm
+    - hot
+    - unknown
+
+  wear_level:
+    - new
+    - slightly_worn
+    - worn
+    - very_worn
+    - unknown
