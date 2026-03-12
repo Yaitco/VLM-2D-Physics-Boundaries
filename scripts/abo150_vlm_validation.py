@@ -9,7 +9,7 @@ import random
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -72,6 +72,13 @@ class VLMRuntime:
     processor: Any
     model: Any
     gen_kwargs: Dict[str, Any]
+
+
+def chunked(seq: Sequence[Any], size: int) -> Iterator[Sequence[Any]]:
+    if size <= 0:
+        raise ValueError("chunk size must be > 0")
+    for i in range(0, len(seq), size):
+        yield seq[i : i + size]
 
 
 def get_secret_value(secret_name: str) -> Optional[str]:
@@ -150,6 +157,25 @@ def _load_enums(schema: Dict[str, Any]) -> Dict[str, List[str]]:
     return out
 
 
+def _load_allowed_values(
+    cfg: Dict[str, Any],
+    enums_map: Dict[str, List[str]],
+    enum_ref_key: str = "enum_ref",
+    inline_enum_key: str = "enum",
+) -> List[str]:
+    enum_ref = cfg.get(enum_ref_key)
+    if enum_ref is not None:
+        values = list(enums_map.get(str(enum_ref), []))
+        if values:
+            return values
+
+    inline_values = cfg.get(inline_enum_key)
+    if isinstance(inline_values, list):
+        return [_normalize_token(str(v)) for v in inline_values]
+
+    return []
+
+
 def load_property_specs(
     schema_path: Path,
     include_groups: Optional[Sequence[str]] = None,
@@ -184,8 +210,7 @@ def load_property_specs(
             desc = str(prop_cfg.get("description") or "").strip()
 
             if prop_type == "categorical":
-                enum_ref = prop_cfg.get("enum_ref")
-                allowed = list(enums_map.get(str(enum_ref), []))
+                allowed = _load_allowed_values(prop_cfg, enums_map)
                 if "unknown" not in allowed:
                     allowed.append("unknown")
                 specs[key] = PropertySpec(
@@ -215,8 +240,7 @@ def load_property_specs(
                     continue
                 if items.get("type") != "categorical":
                     continue
-                enum_ref = items.get("enum_ref")
-                allowed = list(enums_map.get(str(enum_ref), []))
+                allowed = _load_allowed_values(items, enums_map)
                 specs[key] = PropertySpec(
                     key=key,
                     group=group_name,
@@ -491,6 +515,11 @@ def parse_model_output(raw_text: str) -> Tuple[Optional[Dict[str, Any]], Optiona
 def _fetch_pred_raw_value(parsed_json: Dict[str, Any], key: str) -> Any:
     group, name = key.split(".", 1)
 
+    if key in parsed_json:
+        return parsed_json[key]
+    if name in parsed_json:
+        return parsed_json[name]
+
     props = parsed_json.get("properties", {})
     if isinstance(props, dict):
         if key in props:
@@ -536,13 +565,12 @@ def normalize_pred(
     }
 
 
-def build_prompt_for_sample(
-    image_id: str,
+def select_property_keys_for_sample(
     gt_properties: Dict[str, Any],
     property_specs: Dict[str, PropertySpec],
     include_only_gt_known: bool = True,
     max_properties_per_sample: Optional[int] = None,
-) -> Tuple[str, List[str]]:
+) -> List[str]:
     property_keys = list(property_specs.keys())
 
     if include_only_gt_known:
@@ -559,9 +587,16 @@ def build_prompt_for_sample(
 
     if max_properties_per_sample is not None and len(selected) > max_properties_per_sample:
         selected = selected[:max_properties_per_sample]
+    return selected
 
+
+def build_prompt_for_sample(
+    image_id: str,
+    selected_keys: List[str],
+    property_specs: Dict[str, PropertySpec],
+) -> str:
     lines = []
-    for key in selected:
+    for key in selected_keys:
         spec = property_specs[key]
         if spec.value_type == "categorical":
             allowed = "|".join(spec.allowed_values)
@@ -575,7 +610,7 @@ def build_prompt_for_sample(
             lines.append(f"  desc: {spec.description}")
 
     prop_block = "\n".join(lines)
-    key_block = ", ".join(selected)
+    key_block = ", ".join(selected_keys)
 
     prompt = f"""
 You are given an image of one product.
@@ -603,7 +638,51 @@ Property definitions:
 {prop_block}
 """.strip()
 
-    return prompt, selected
+    return prompt
+
+
+def build_single_property_prompt(
+    image_id: str,
+    property_key: str,
+    spec: PropertySpec,
+) -> str:
+    if spec.value_type == "categorical":
+        value_hint = "string"
+        rule_line = f'- "{property_key}" must be one of [{ "|".join(spec.allowed_values) }]'
+    elif spec.value_type == "boolean":
+        value_hint = "string"
+        rule_line = f'- "{property_key}" must be one of [true|false|unknown]'
+    else:
+        value_hint = "array"
+        rule_line = (
+            f'- "{property_key}" must be an array with values from '
+            f'[{ "|".join(spec.allowed_values) }], or []'
+        )
+
+    desc_line = f"Property description: {spec.description}" if spec.description else ""
+
+    return f"""
+You are given an image of one product.
+The image_id is "{image_id}". The output JSON must contain exactly this image_id.
+
+Predict ONLY this property: "{property_key}".
+
+Return ONLY JSON with this structure:
+{{
+  "image_id": "{image_id}",
+  "primary_object": "<short noun phrase>",
+  "properties": {{
+    "{property_key}": <{value_hint}>
+  }},
+  "notes": "<short visual evidence>"
+}}
+
+Rules:
+{rule_line}
+- Do not add any other property keys.
+- No markdown, no code fences, no extra text.
+{desc_line}
+""".strip()
 
 
 def make_bnb_config(use_4bit: bool):
@@ -708,8 +787,77 @@ def infer_hf_chat(runtime: VLMRuntime, image: Image.Image, prompt: str) -> str:
     return runtime.processor.batch_decode(gen_tokens, skip_special_tokens=True)[0]
 
 
+def infer_hf_chat_batch(runtime: VLMRuntime, image: Image.Image, prompts: Sequence[str]) -> List[str]:
+    if not prompts:
+        return []
+
+    if len(prompts) == 1:
+        return [infer_hf_chat(runtime, image, prompts[0])]
+
+    messages_batch = [
+        [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ]
+        for prompt in prompts
+    ]
+
+    texts: List[str] = []
+    if hasattr(runtime.processor, "apply_chat_template"):
+        for messages, prompt in zip(messages_batch, prompts):
+            try:
+                text = runtime.processor.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=True
+                )
+            except TypeError:
+                text = runtime.processor.apply_chat_template(
+                    messages, add_generation_prompt=True
+                )
+            if not isinstance(text, str):
+                text = prompt
+            texts.append(text)
+    else:
+        texts = list(prompts)
+
+    images = [image] * len(prompts)
+    inputs = runtime.processor(
+        text=texts,
+        images=images,
+        return_tensors="pt",
+        padding=True,
+        truncation=False,
+    )
+
+    if hasattr(runtime.model, "device") and str(runtime.model.device) != "meta":
+        inputs = {
+            key: value.to(runtime.model.device) if hasattr(value, "to") else value
+            for key, value in inputs.items()
+        }
+
+    with torch.no_grad():
+        out = runtime.model.generate(**inputs, **runtime.gen_kwargs)
+
+    if "attention_mask" in inputs:
+        input_lens = inputs["attention_mask"].sum(dim=1).tolist()
+    else:
+        input_lens = [inputs["input_ids"].shape[1]] * len(prompts)
+
+    generated = []
+    for i, input_len in enumerate(input_lens):
+        gen = out[i, int(input_len) :].detach().cpu()
+        generated.append(gen)
+
+    return runtime.processor.batch_decode(generated, skip_special_tokens=True)
+
+
 BACKEND_LOADERS = {"hf_chat": load_hf_chat_runtime}
 BACKEND_INFER = {"hf_chat": infer_hf_chat}
+BACKEND_INFER_BATCH = {"hf_chat": infer_hf_chat_batch}
 
 
 def load_runtime(model_key: str, model_registry: Dict[str, Dict[str, Any]]) -> VLMRuntime:
@@ -722,6 +870,13 @@ def load_runtime(model_key: str, model_registry: Dict[str, Dict[str, Any]]) -> V
 
 def infer_runtime(runtime: VLMRuntime, image: Image.Image, prompt: str) -> str:
     return BACKEND_INFER[runtime.backend](runtime, image, prompt)
+
+
+def infer_runtime_batch(runtime: VLMRuntime, image: Image.Image, prompts: Sequence[str]) -> List[str]:
+    fn = BACKEND_INFER_BATCH.get(runtime.backend)
+    if fn is None:
+        return [infer_runtime(runtime, image, p) for p in prompts]
+    return fn(runtime, image, prompts)
 
 
 def unload_runtime(runtime: Optional[VLMRuntime]) -> None:
@@ -775,6 +930,8 @@ def evaluate_one(
     sample_meta: Dict[str, Any],
     property_specs: Dict[str, PropertySpec],
     variant: str,
+    prompt_mode: str,
+    property_batch_size: int,
     include_only_gt_known: bool,
     max_properties_per_sample: Optional[int],
     mask_background_mode: str,
@@ -788,33 +945,120 @@ def evaluate_one(
     )
 
     gt_props = sample_meta["gt_properties"]
-    prompt, selected_keys = build_prompt_for_sample(
-        image_id=image_id,
+    selected_keys = select_property_keys_for_sample(
         gt_properties=gt_props,
         property_specs=property_specs,
         include_only_gt_known=include_only_gt_known,
         max_properties_per_sample=max_properties_per_sample,
     )
 
-    raw = infer_runtime(runtime, image, prompt)
-    parsed_json, parse_error = parse_model_output(raw)
-    pred = normalize_pred(parsed_json, property_specs)
+    pred_props = {
+        key: ([] if spec.value_type == "multi_categorical" else "unknown")
+        for key, spec in property_specs.items()
+    }
+    raw_output_payload: Any = None
+    parse_errors: List[str] = []
+    valid_json_count = 0
+    image_id_match_count = 0
+    primary_object_pred = None
+    notes_pred = None
+
+    if prompt_mode == "joint":
+        prompt = build_prompt_for_sample(
+            image_id=image_id,
+            selected_keys=selected_keys,
+            property_specs=property_specs,
+        )
+        raw = infer_runtime(runtime, image, prompt)
+        parsed_json, parse_error = parse_model_output(raw)
+        pred = normalize_pred(parsed_json, property_specs)
+
+        for key in selected_keys:
+            pred_props[key] = pred["properties"][key]
+
+        if parse_error:
+            parse_errors.append(parse_error)
+        else:
+            valid_json_count = 1
+        if pred.get("image_id") == image_id:
+            image_id_match_count = 1
+
+        primary_object_pred = pred.get("primary_object")
+        notes_pred = pred.get("notes")
+        raw_output_payload = raw
+
+    elif prompt_mode == "per_property":
+        raw_map: Dict[str, str] = {}
+
+        for key_chunk in chunked(selected_keys, property_batch_size):
+            prompt_chunk = [
+                build_single_property_prompt(
+                    image_id=image_id,
+                    property_key=key,
+                    spec=property_specs[key],
+                )
+                for key in key_chunk
+            ]
+            raw_chunk = infer_runtime_batch(runtime, image, prompt_chunk)
+            for key, raw in zip(key_chunk, raw_chunk):
+                raw_map[key] = raw
+
+                parsed_json, parse_error = parse_model_output(raw)
+                if parse_error:
+                    parse_errors.append(f"{key}: {parse_error}")
+                else:
+                    valid_json_count += 1
+
+                if isinstance(parsed_json, dict):
+                    if str(parsed_json.get("image_id")).strip() == image_id:
+                        image_id_match_count += 1
+                    if primary_object_pred is None and parsed_json.get("primary_object") is not None:
+                        primary_object_pred = parsed_json.get("primary_object")
+                    if notes_pred is None and parsed_json.get("notes") is not None:
+                        notes_pred = parsed_json.get("notes")
+
+                    pred_val = normalize_value(
+                        property_specs[key],
+                        _fetch_pred_raw_value(parsed_json, key),
+                    )
+                    pred_props[key] = pred_val
+
+        raw_output_payload = raw_map
+    else:
+        raise ValueError(f"Unknown prompt_mode: {prompt_mode}")
+
+    requested_count = len(selected_keys)
+    expected_response_count = 1 if prompt_mode == "joint" else requested_count
+    has_valid_json = (
+        valid_json_count == expected_response_count
+        if expected_response_count
+        else False
+    )
+    image_id_matched = (
+        image_id_match_count == expected_response_count
+        if expected_response_count
+        else False
+    )
+    parse_error = None if not parse_errors else " | ".join(parse_errors[:30])
 
     row = {
         "variant": variant,
         "image_id": image_id,
         "path": sample_meta.get("path"),
         "mask_path": sample_meta.get("mask_path"),
-        "has_valid_json": parse_error is None,
+        "has_valid_json": has_valid_json,
         "parse_error": parse_error,
-        "image_id_matched": pred.get("image_id") == image_id,
-        "primary_object_pred": pred.get("primary_object"),
-        "notes_pred": pred.get("notes"),
-        "requested_property_count": len(selected_keys),
+        "image_id_matched": image_id_matched,
+        "valid_json_count": valid_json_count,
+        "image_id_match_count": image_id_match_count,
+        "primary_object_pred": primary_object_pred,
+        "notes_pred": notes_pred,
+        "requested_property_count": requested_count,
+        "expected_response_count": expected_response_count,
         "requested_property_keys": "|".join(selected_keys),
+        "prompt_mode": prompt_mode,
     }
 
-    pred_props = pred["properties"]
     for key, spec in property_specs.items():
         col = _column_prefix(key)
         gt_val = gt_props[key]
@@ -830,7 +1074,11 @@ def evaluate_one(
         row[f"{col}_exact_match"] = gt_known and values_equal(spec, pred_val, gt_val)
 
     if save_raw_output:
-        row["raw_output"] = raw
+        row["raw_output"] = (
+            raw_output_payload
+            if isinstance(raw_output_payload, str)
+            else json.dumps(raw_output_payload, ensure_ascii=False)
+        )
 
     return row
 
@@ -841,6 +1089,8 @@ def run_validation(
     property_specs: Dict[str, PropertySpec],
     model_registry: Dict[str, Dict[str, Any]],
     variant: str = "raw",
+    prompt_mode: str = "joint",
+    property_batch_size: int = 8,
     include_only_gt_known: bool = True,
     max_properties_per_sample: Optional[int] = None,
     mask_background_mode: str = "black",
@@ -858,6 +1108,8 @@ def run_validation(
                     sample_meta=sample_meta,
                     property_specs=property_specs,
                     variant=variant,
+                    prompt_mode=prompt_mode,
+                    property_batch_size=property_batch_size,
                     include_only_gt_known=include_only_gt_known,
                     max_properties_per_sample=max_properties_per_sample,
                     mask_background_mode=mask_background_mode,
@@ -876,7 +1128,9 @@ def run_validation(
                     "primary_object_pred": None,
                     "notes_pred": None,
                     "requested_property_count": 0,
+                    "expected_response_count": 0,
                     "requested_property_keys": "",
+                    "prompt_mode": prompt_mode,
                 }
 
                 gt_props = sample_meta.get("gt_properties", {})
@@ -962,6 +1216,10 @@ def log_report_to_comet(
         f"{model_key}/{variant}/valid_json_pct": summary["valid_json_pct"],
         f"{model_key}/{variant}/image_id_match_pct": summary["image_id_match_pct"],
     }
+    if summary.get("valid_json_per_response_pct") is not None:
+        summary_metrics[f"{model_key}/{variant}/valid_json_per_response_pct"] = summary[
+            "valid_json_per_response_pct"
+        ]
     comet_experiment.log_metrics(summary_metrics)
 
     for _, row in property_metrics.iterrows():
@@ -1018,12 +1276,19 @@ def save_report(
         "model_key": model_key,
         "model_id": model_registry[model_key]["model_id"],
         "variant": variant,
+        "prompt_mode": str(df["prompt_mode"].iloc[0]) if "prompt_mode" in df.columns and len(df) else "unknown",
         "num_samples": int(len(df)),
         "valid_json_count": int(df["has_valid_json"].sum()),
         "valid_json_pct": round(100.0 * float(df["has_valid_json"].mean()), 2) if len(df) else 0.0,
         "image_id_match_count": int(df["image_id_matched"].sum()),
         "image_id_match_pct": round(100.0 * float(df["image_id_matched"].mean()), 2) if len(df) else 0.0,
     }
+    if {"valid_json_count", "expected_response_count"}.issubset(df.columns) and len(df):
+        total_expected = float(df["expected_response_count"].sum())
+        total_valid = float(df["valid_json_count"].sum())
+        summary["valid_json_per_response_pct"] = (
+            round(100.0 * total_valid / total_expected, 2) if total_expected > 0 else None
+        )
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"\n=== Property coverage ({variant}) ===")
@@ -1075,6 +1340,8 @@ def run_many_models(
     model_registry: Dict[str, Dict[str, Any]],
     reports_dir: Path,
     variants: Optional[List[str]] = None,
+    prompt_mode: str = "joint",
+    property_batch_size: int = 8,
     include_only_gt_known: bool = True,
     max_properties_per_sample: Optional[int] = None,
     mask_background_mode: str = "black",
@@ -1094,6 +1361,8 @@ def run_many_models(
                 property_specs=property_specs,
                 model_registry=model_registry,
                 variant=variant,
+                prompt_mode=prompt_mode,
+                property_batch_size=property_batch_size,
                 include_only_gt_known=include_only_gt_known,
                 max_properties_per_sample=max_properties_per_sample,
                 mask_background_mode=mask_background_mode,
@@ -1113,6 +1382,8 @@ def run_many_models(
                     {
                         "model_key": model_key,
                         "variant": variant,
+                        "prompt_mode": prompt_mode,
+                        "property_batch_size": property_batch_size,
                         "property": r["property"],
                         "group": r["group"],
                         "value_type": r["value_type"],
