@@ -7,6 +7,7 @@ import json
 import os
 import random
 import re
+import ast
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
@@ -37,19 +38,19 @@ MODEL_REGISTRY = {
         "backend": "hf_chat",
         "model_id": "Qwen/Qwen3-VL-8B-Instruct",
         "use_4bit": True,
-        "max_new_tokens": 1024,
+        "max_new_tokens": 1536,
     },
     "qwen2_5_vl_7b": {
         "backend": "hf_chat",
         "model_id": "Qwen/Qwen2.5-VL-7B-Instruct",
         "use_4bit": True,
-        "max_new_tokens": 1024,
+        "max_new_tokens": 1536,
     },
     "llava_onevision_1_5_8b": {
         "backend": "hf_chat",
         "model_id": "lmms-lab/LLaVA-OneVision-1.5-8B-Instruct",
         "use_4bit": True,
-        "max_new_tokens": 1024,
+        "max_new_tokens": 1536,
     },
 }
 
@@ -508,8 +509,24 @@ def parse_model_output(raw_text: str) -> Tuple[Optional[Dict[str, Any]], Optiona
         if not isinstance(parsed, dict):
             return None, "json_not_object"
         return parsed, None
-    except Exception as exc:
-        return None, f"json_parse_error: {exc}"
+    except Exception as exc_json:
+        # Fallback 1: YAML parser can often handle trailing commas and similar minor issues.
+        try:
+            parsed = yaml.safe_load(blob)
+            if isinstance(parsed, dict):
+                return parsed, None
+        except Exception:
+            pass
+
+        # Fallback 2: Python-literal dicts with single quotes / True / False.
+        try:
+            parsed = ast.literal_eval(blob)
+            if isinstance(parsed, dict):
+                return parsed, None
+        except Exception:
+            pass
+
+        return None, f"json_parse_error: {exc_json}"
 
 
 def _fetch_pred_raw_value(parsed_json: Dict[str, Any], key: str) -> Any:
@@ -936,6 +953,8 @@ def evaluate_one(
     max_properties_per_sample: Optional[int],
     mask_background_mode: str,
     save_raw_output: bool,
+    json_success_threshold: float,
+    image_id_success_threshold: Optional[float],
 ) -> Dict[str, Any]:
     image_id = str(sample_meta["image_id"])
     image = load_variant_image(
@@ -1029,16 +1048,33 @@ def evaluate_one(
 
     requested_count = len(selected_keys)
     expected_response_count = 1 if prompt_mode == "joint" else requested_count
-    has_valid_json = (
+    valid_json_ratio = (
+        float(valid_json_count) / float(expected_response_count)
+        if expected_response_count > 0
+        else 0.0
+    )
+    image_id_match_ratio = (
+        float(image_id_match_count) / float(expected_response_count)
+        if expected_response_count > 0
+        else 0.0
+    )
+    has_valid_json_all = (
         valid_json_count == expected_response_count
         if expected_response_count
         else False
     )
-    image_id_matched = (
+    image_id_matched_all = (
         image_id_match_count == expected_response_count
         if expected_response_count
         else False
     )
+    image_id_threshold = (
+        json_success_threshold
+        if image_id_success_threshold is None
+        else image_id_success_threshold
+    )
+    has_valid_json = valid_json_ratio >= json_success_threshold
+    image_id_matched = image_id_match_ratio >= image_id_threshold
     parse_error = None if not parse_errors else " | ".join(parse_errors[:30])
 
     row = {
@@ -1047,10 +1083,16 @@ def evaluate_one(
         "path": sample_meta.get("path"),
         "mask_path": sample_meta.get("mask_path"),
         "has_valid_json": has_valid_json,
+        "has_valid_json_all": has_valid_json_all,
         "parse_error": parse_error,
         "image_id_matched": image_id_matched,
+        "image_id_matched_all": image_id_matched_all,
         "valid_json_count": valid_json_count,
         "image_id_match_count": image_id_match_count,
+        "valid_json_ratio": round(valid_json_ratio, 6),
+        "image_id_match_ratio": round(image_id_match_ratio, 6),
+        "json_success_threshold": json_success_threshold,
+        "image_id_success_threshold": image_id_threshold,
         "primary_object_pred": primary_object_pred,
         "notes_pred": notes_pred,
         "requested_property_count": requested_count,
@@ -1095,6 +1137,8 @@ def run_validation(
     max_properties_per_sample: Optional[int] = None,
     mask_background_mode: str = "black",
     save_raw_output: bool = True,
+    json_success_threshold: float = 1.0,
+    image_id_success_threshold: Optional[float] = None,
 ) -> pd.DataFrame:
     runtime = None
     rows = []
@@ -1114,6 +1158,8 @@ def run_validation(
                     max_properties_per_sample=max_properties_per_sample,
                     mask_background_mode=mask_background_mode,
                     save_raw_output=save_raw_output,
+                    json_success_threshold=json_success_threshold,
+                    image_id_success_threshold=image_id_success_threshold,
                 )
             except Exception as exc:
                 image_id = str(sample_meta.get("image_id", "unknown"))
@@ -1123,8 +1169,20 @@ def run_validation(
                     "path": sample_meta.get("path"),
                     "mask_path": sample_meta.get("mask_path"),
                     "has_valid_json": False,
+                    "has_valid_json_all": False,
                     "parse_error": f"runtime_error: {exc}",
                     "image_id_matched": False,
+                    "image_id_matched_all": False,
+                    "valid_json_count": 0,
+                    "image_id_match_count": 0,
+                    "valid_json_ratio": 0.0,
+                    "image_id_match_ratio": 0.0,
+                    "json_success_threshold": json_success_threshold,
+                    "image_id_success_threshold": (
+                        image_id_success_threshold
+                        if image_id_success_threshold is not None
+                        else json_success_threshold
+                    ),
                     "primary_object_pred": None,
                     "notes_pred": None,
                     "requested_property_count": 0,
@@ -1216,6 +1274,10 @@ def log_report_to_comet(
         f"{model_key}/{variant}/valid_json_pct": summary["valid_json_pct"],
         f"{model_key}/{variant}/image_id_match_pct": summary["image_id_match_pct"],
     }
+    if summary.get("valid_json_all_pct") is not None:
+        summary_metrics[f"{model_key}/{variant}/valid_json_all_pct"] = summary["valid_json_all_pct"]
+    if summary.get("image_id_match_all_pct") is not None:
+        summary_metrics[f"{model_key}/{variant}/image_id_match_all_pct"] = summary["image_id_match_all_pct"]
     if summary.get("valid_json_per_response_pct") is not None:
         summary_metrics[f"{model_key}/{variant}/valid_json_per_response_pct"] = summary[
             "valid_json_per_response_pct"
@@ -1280,8 +1342,20 @@ def save_report(
         "num_samples": int(len(df)),
         "valid_json_count": int(df["has_valid_json"].sum()),
         "valid_json_pct": round(100.0 * float(df["has_valid_json"].mean()), 2) if len(df) else 0.0,
+        "valid_json_all_count": int(df["has_valid_json_all"].sum()) if "has_valid_json_all" in df.columns else None,
+        "valid_json_all_pct": (
+            round(100.0 * float(df["has_valid_json_all"].mean()), 2)
+            if "has_valid_json_all" in df.columns and len(df)
+            else None
+        ),
         "image_id_match_count": int(df["image_id_matched"].sum()),
         "image_id_match_pct": round(100.0 * float(df["image_id_matched"].mean()), 2) if len(df) else 0.0,
+        "image_id_match_all_count": int(df["image_id_matched_all"].sum()) if "image_id_matched_all" in df.columns else None,
+        "image_id_match_all_pct": (
+            round(100.0 * float(df["image_id_matched_all"].mean()), 2)
+            if "image_id_matched_all" in df.columns and len(df)
+            else None
+        ),
     }
     if {"valid_json_count", "expected_response_count"}.issubset(df.columns) and len(df):
         total_expected = float(df["expected_response_count"].sum())
@@ -1346,6 +1420,8 @@ def run_many_models(
     max_properties_per_sample: Optional[int] = None,
     mask_background_mode: str = "black",
     save_raw_output: bool = True,
+    json_success_threshold: float = 1.0,
+    image_id_success_threshold: Optional[float] = None,
     comet_experiment=None,
 ) -> pd.DataFrame:
     if variants is None:
@@ -1367,6 +1443,8 @@ def run_many_models(
                 max_properties_per_sample=max_properties_per_sample,
                 mask_background_mode=mask_background_mode,
                 save_raw_output=save_raw_output,
+                json_success_threshold=json_success_threshold,
+                image_id_success_threshold=image_id_success_threshold,
             )
             pm, summary = save_report(
                 df=df,
