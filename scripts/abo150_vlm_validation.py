@@ -1670,6 +1670,7 @@ def evaluate_one(
     variant: str,
     prompt_mode: str,
     property_batch_size: int,
+    property_group_size: int,
     include_only_gt_known: bool,
     few_shot_k: int,
     few_shot_selection_mode: str,
@@ -1868,11 +1869,130 @@ def evaluate_one(
                         pred_props[key] = pred_val
 
         raw_output_payload = raw_map
+    elif prompt_mode == "grouped":
+        raw_map: Dict[str, str] = {}
+        key_groups = [list(chunk) for chunk in chunked(selected_keys, property_group_size)]
+
+        shared_demos: Optional[List[Dict[str, Any]]] = None
+        if few_shot_k > 0 and few_shot_selection_mode == "fixed":
+            shared_demos = select_few_shot_examples(
+                current_image_id=image_id,
+                samples=few_shot_pool,
+                property_specs=property_specs,
+                few_shot_k=few_shot_k,
+                selected_keys=selected_keys,
+                selection_mode=few_shot_selection_mode,
+                fixed_candidates=fixed_few_shot_candidates,
+            )
+            few_shot_demo_ids = [str(x["image_id"]) for x in shared_demos]
+
+        for key_group_chunk in chunked(key_groups, property_batch_size):
+            if few_shot_k > 0:
+                messages_batch: List[List[Dict[str, Any]]] = []
+                images_batch: List[List[Image.Image]] = []
+                group_keys_batch: List[List[str]] = []
+
+                for key_group in key_group_chunk:
+                    demos = shared_demos
+                    if demos is None:
+                        demos = select_few_shot_examples(
+                            current_image_id=image_id,
+                            samples=few_shot_pool,
+                            property_specs=property_specs,
+                            few_shot_k=few_shot_k,
+                            selected_keys=key_group,
+                            selection_mode=few_shot_selection_mode,
+                            fixed_candidates=fixed_few_shot_candidates,
+                        )
+                        if not few_shot_demo_ids:
+                            few_shot_demo_ids = [str(x["image_id"]) for x in demos]
+
+                    prompt = build_prompt_for_sample(
+                        image_id=image_id,
+                        selected_keys=key_group,
+                        property_specs=property_specs,
+                    )
+                    messages, images = build_joint_few_shot_messages(
+                        image_id=image_id,
+                        image=image,
+                        prompt=prompt,
+                        demos=demos,
+                        property_specs=property_specs,
+                        selected_keys=key_group,
+                        variant=variant,
+                        mask_background_mode=mask_background_mode,
+                        image_cache=image_cache,
+                    )
+                    messages_batch.append(messages)
+                    images_batch.append(images)
+                    group_keys_batch.append(key_group)
+
+                raw_chunk = infer_runtime_messages_batch(runtime, messages_batch, images_batch)
+                for key_group, raw in zip(group_keys_batch, raw_chunk):
+                    group_label = "|".join(key_group)
+                    raw_map[group_label] = raw
+
+                    parsed_json, parse_error = parse_model_output(raw)
+                    pred = normalize_pred(parsed_json, property_specs)
+
+                    if parse_error:
+                        parse_errors.append(f"{group_label}: {parse_error}")
+                    else:
+                        valid_json_count += 1
+
+                    if pred.get("image_id") == image_id:
+                        image_id_match_count += 1
+                    if primary_object_pred is None and pred.get("primary_object") is not None:
+                        primary_object_pred = pred.get("primary_object")
+                    if notes_pred is None and pred.get("notes") is not None:
+                        notes_pred = pred.get("notes")
+
+                    for key in key_group:
+                        pred_props[key] = pred["properties"][key]
+            else:
+                prompt_chunk = [
+                    build_prompt_for_sample(
+                        image_id=image_id,
+                        selected_keys=key_group,
+                        property_specs=property_specs,
+                    )
+                    for key_group in key_group_chunk
+                ]
+                raw_chunk = infer_runtime_batch(runtime, image, prompt_chunk)
+
+                for key_group, raw in zip(key_group_chunk, raw_chunk):
+                    group_label = "|".join(key_group)
+                    raw_map[group_label] = raw
+
+                    parsed_json, parse_error = parse_model_output(raw)
+                    pred = normalize_pred(parsed_json, property_specs)
+
+                    if parse_error:
+                        parse_errors.append(f"{group_label}: {parse_error}")
+                    else:
+                        valid_json_count += 1
+
+                    if pred.get("image_id") == image_id:
+                        image_id_match_count += 1
+                    if primary_object_pred is None and pred.get("primary_object") is not None:
+                        primary_object_pred = pred.get("primary_object")
+                    if notes_pred is None and pred.get("notes") is not None:
+                        notes_pred = pred.get("notes")
+
+                    for key in key_group:
+                        pred_props[key] = pred["properties"][key]
+
+        raw_output_payload = raw_map
     else:
         raise ValueError(f"Unknown prompt_mode: {prompt_mode}")
 
     requested_count = len(selected_keys)
-    expected_response_count = 1 if prompt_mode == "joint" else requested_count
+    if prompt_mode == "joint":
+        expected_response_count = 1
+    elif prompt_mode == "grouped":
+        expected_response_count = len([list(chunk) for chunk in chunked(selected_keys, property_group_size)])
+    else:
+        expected_response_count = requested_count
     valid_json_ratio = (
         float(valid_json_count) / float(expected_response_count)
         if expected_response_count > 0
@@ -1924,6 +2044,7 @@ def evaluate_one(
         "expected_response_count": expected_response_count,
         "requested_property_keys": "|".join(selected_keys),
         "prompt_mode": prompt_mode,
+        "property_group_size": int(property_group_size),
         "few_shot_k": int(few_shot_k),
         "few_shot_selection_mode": few_shot_selection_mode,
         "few_shot_demo_ids": "|".join(few_shot_demo_ids),
@@ -1961,6 +2082,7 @@ def run_validation(
     variant: str = "raw",
     prompt_mode: str = "joint",
     property_batch_size: int = 8,
+    property_group_size: int = 4,
     include_only_gt_known: bool = True,
     few_shot_k: int = 0,
     few_shot_selection_mode: str = "fixed",
@@ -1991,6 +2113,7 @@ def run_validation(
                     variant=variant,
                     prompt_mode=prompt_mode,
                     property_batch_size=property_batch_size,
+                    property_group_size=property_group_size,
                     include_only_gt_known=include_only_gt_known,
                     few_shot_k=few_shot_k,
                     few_shot_selection_mode=few_shot_selection_mode,
@@ -2030,6 +2153,7 @@ def run_validation(
                     "expected_response_count": 0,
                     "requested_property_keys": "",
                     "prompt_mode": prompt_mode,
+                    "property_group_size": int(property_group_size),
                     "few_shot_k": int(few_shot_k),
                     "few_shot_selection_mode": few_shot_selection_mode,
                     "few_shot_demo_ids": "",
@@ -2209,6 +2333,11 @@ def save_report(
         "model_id": model_registry[model_key]["model_id"],
         "variant": variant,
         "prompt_mode": str(df["prompt_mode"].iloc[0]) if "prompt_mode" in df.columns and len(df) else "unknown",
+        "property_group_size": (
+            int(df["property_group_size"].iloc[0])
+            if "property_group_size" in df.columns and len(df)
+            else None
+        ),
         "few_shot_k": int(df["few_shot_k"].iloc[0]) if "few_shot_k" in df.columns and len(df) else 0,
         "few_shot_selection_mode": (
             str(df["few_shot_selection_mode"].iloc[0])
@@ -2316,6 +2445,7 @@ def run_many_models(
     variants: Optional[List[str]] = None,
     prompt_mode: str = "joint",
     property_batch_size: int = 8,
+    property_group_size: int = 4,
     include_only_gt_known: bool = True,
     few_shot_k: int = 0,
     few_shot_selection_mode: str = "fixed",
@@ -2341,6 +2471,7 @@ def run_many_models(
                 variant=variant,
                 prompt_mode=prompt_mode,
                 property_batch_size=property_batch_size,
+                property_group_size=property_group_size,
                 include_only_gt_known=include_only_gt_known,
                 few_shot_k=few_shot_k,
                 few_shot_selection_mode=few_shot_selection_mode,
@@ -2366,6 +2497,7 @@ def run_many_models(
                         "variant": variant,
                         "prompt_mode": prompt_mode,
                         "property_batch_size": property_batch_size,
+                        "property_group_size": property_group_size,
                         "few_shot_k": few_shot_k,
                         "few_shot_selection_mode": few_shot_selection_mode,
                         "property": r["property"],

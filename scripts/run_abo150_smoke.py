@@ -41,8 +41,14 @@ def parse_args() -> argparse.Namespace:
         "--prompt-mode",
         type=str,
         default="per_property",
-        choices=["joint", "per_property"],
+        choices=["joint", "per_property", "grouped"],
         help="Prompt mode to exercise during the smoke test.",
+    )
+    parser.add_argument(
+        "--property-group-size",
+        type=int,
+        default=4,
+        help="How many properties to ask in one grouped prompt.",
     )
     parser.add_argument(
         "--protocol-name",
@@ -204,6 +210,7 @@ def main() -> None:
         variant="raw",
         prompt_mode=args.prompt_mode,
         property_batch_size=4,
+        property_group_size=args.property_group_size,
         include_only_gt_known=args.include_only_gt_known,
         few_shot_k=args.few_shot_k,
         few_shot_selection_mode=args.few_shot_selection_mode,
