@@ -1164,6 +1164,12 @@ def load_hf_chat_runtime(name: str, cfg: Dict[str, Any]) -> VLMRuntime:
     }
 
     processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+    tokenizer = getattr(processor, "tokenizer", None)
+    if tokenizer is not None:
+        try:
+            tokenizer.padding_side = "left"
+        except Exception:
+            pass
     model_kwargs: Dict[str, Any] = {
         "device_map": "auto",
         "trust_remote_code": True,
@@ -1181,6 +1187,20 @@ def load_hf_chat_runtime(name: str, cfg: Dict[str, Any]) -> VLMRuntime:
         print(f"AutoModelForImageTextToText failed: {exc}")
         print("Falling back to AutoModelForCausalLM...")
         model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+
+    generation_config = getattr(model, "generation_config", None)
+    if generation_config is not None:
+        try:
+            generation_config.do_sample = gen_kwargs["do_sample"]
+        except Exception:
+            pass
+        if not gen_kwargs["do_sample"]:
+            for attr in ("temperature", "top_p", "top_k", "typical_p", "min_p"):
+                if hasattr(generation_config, attr):
+                    try:
+                        setattr(generation_config, attr, None)
+                    except Exception:
+                        pass
 
     model.eval()
     return VLMRuntime(
