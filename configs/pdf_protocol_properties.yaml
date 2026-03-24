@@ -1,0 +1,116 @@
+properties:
+  material:
+    type: categorical
+    enum:
+      - metal
+      - wood
+      - glass
+      - plastic
+      - fabric
+      - paper/cardboard
+      - ceramic/stone
+      - rubber
+      - leather
+      - other
+      - unknown
+    description: "Основной материал объекта в компактном протоколе из PDF."
+
+  transparency:
+    type: categorical
+    enum:
+      - opaque
+      - translucent
+      - transparent
+      - unknown
+    description: "Степень прозрачности объекта."
+
+  reflectance:
+    type: categorical
+    enum:
+      - matte
+      - glossy
+      - unknown
+    description: "Обобщённая отражательная способность поверхности."
+
+  surface_roughness:
+    type: categorical
+    enum:
+      - smooth
+      - rough
+      - unknown
+    description: "Грубая оценка шероховатости поверхности."
+
+  rigidity:
+    type: categorical
+    enum:
+      - rigid
+      - deformable
+      - unknown
+    description: "Жёсткий или деформируемый объект."
+
+  fragility:
+    type: categorical
+    enum:
+      - fragile
+      - not_fragile
+      - unknown
+    description: "Ломкий объект или нет."
+
+  wetness:
+    type: categorical
+    enum:
+      - wet
+      - dry
+      - unknown
+    description: "Визуальная оценка влажности."
+
+  state:
+    type: categorical
+    enum:
+      - clean
+      - dirty
+      - unknown
+    description: "Состояние поверхности: чистый или грязный."
+
+  weight_hint:
+    type: categorical
+    enum:
+      - light
+      - heavy
+      - unknown
+    description: "Грубая визуальная подсказка о массе."
+
+  temperature_hint:
+    type: categorical
+    enum:
+      - hot
+      - cold
+      - room
+      - unknown
+    description: "Оценка температурного состояния по внешнему виду."
+
+  phase:
+    type: categorical
+    enum:
+      - solid
+      - liquid
+      - gas
+      - unknown
+    description: "Агрегатное состояние объекта."
+
+  filled_state:
+    type: categorical
+    enum:
+      - empty
+      - partially_filled
+      - filled
+      - unknown
+    description: "Насколько объект наполнен."
+
+  slipperiness_hint:
+    type: categorical
+    enum:
+      - slippery
+      - not_slippery
+      - unknown
+    description: "Подсказка о скользкости поверхности."

@@ -54,6 +54,9 @@ MODEL_REGISTRY = {
     },
 }
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+PDF_COMPACT_SCHEMA_PATH = ROOT_DIR / "configs" / "pdf_protocol_properties.yaml"
+
 
 @dataclass
 class PropertySpec:
@@ -256,6 +259,57 @@ def load_property_specs(
     return specs
 
 
+def load_compact_property_specs(schema_path: Path) -> Dict[str, PropertySpec]:
+    """Load flat property specs for the compact PDF protocol."""
+    with schema_path.open("r", encoding="utf-8") as f:
+        schema = yaml.safe_load(f)
+
+    properties = schema.get("properties", {})
+    if not isinstance(properties, dict):
+        raise ValueError(f"Invalid compact schema: properties are missing in {schema_path}")
+
+    specs: Dict[str, PropertySpec] = {}
+    for key, cfg in properties.items():
+        if not isinstance(cfg, dict):
+            continue
+        prop_type = str(cfg.get("type"))
+        if prop_type != "categorical":
+            raise ValueError(f"Compact PDF protocol expects categorical properties only: {key}")
+
+        allowed = _load_allowed_values(cfg, enums_map={})
+        if "unknown" not in allowed:
+            allowed.append("unknown")
+        specs[str(key)] = PropertySpec(
+            key=str(key),
+            group="pdf_compact",
+            name=str(key),
+            value_type="categorical",
+            allowed_values=allowed,
+            description=str(cfg.get("description") or "").strip(),
+        )
+
+    if not specs:
+        raise ValueError(f"No properties found in compact schema: {schema_path}")
+    return specs
+
+
+def load_protocol_property_specs(
+    protocol_name: str,
+    schema_path: Optional[Path] = None,
+    include_groups: Optional[Sequence[str]] = None,
+) -> Dict[str, PropertySpec]:
+    if protocol_name == "expanded_ontology":
+        if schema_path is None:
+            raise ValueError("schema_path is required for expanded_ontology protocol")
+        return load_property_specs(schema_path=schema_path, include_groups=include_groups)
+
+    if protocol_name == "pdf_compact":
+        compact_path = schema_path or PDF_COMPACT_SCHEMA_PATH
+        return load_compact_property_specs(compact_path)
+
+    raise ValueError(f"Unknown protocol_name: {protocol_name}")
+
+
 def _normalize_categorical(value: Any, allowed: Sequence[str]) -> str:
     allowed_set = set(allowed)
     if value is None:
@@ -350,6 +404,52 @@ def serialize_value(value: Any) -> str:
     return str(value)
 
 
+def _compute_accuracy_pct(gt_values: Sequence[str], pred_values: Sequence[str]) -> Optional[float]:
+    if not gt_values:
+        return None
+    correct = sum(1 for gt, pred in zip(gt_values, pred_values) if gt == pred)
+    return round(100.0 * correct / len(gt_values), 2)
+
+
+def _compute_macro_f1_pct(
+    gt_values: Sequence[str],
+    pred_values: Sequence[str],
+    labels: Sequence[str],
+) -> Optional[float]:
+    if not gt_values:
+        return None
+    if not labels:
+        return None
+
+    f1_values: List[float] = []
+    for label in labels:
+        tp = sum(1 for gt, pred in zip(gt_values, pred_values) if gt == label and pred == label)
+        fp = sum(1 for gt, pred in zip(gt_values, pred_values) if gt != label and pred == label)
+        fn = sum(1 for gt, pred in zip(gt_values, pred_values) if gt == label and pred != label)
+
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        if precision + recall == 0:
+            f1 = 0.0
+        else:
+            f1 = 2 * precision * recall / (precision + recall)
+        f1_values.append(f1)
+
+    return round(100.0 * float(sum(f1_values) / len(f1_values)), 2)
+
+
+def _compute_selective_accuracy_pct(
+    gt_values: Sequence[str],
+    pred_values: Sequence[str],
+    unknown_label: str = "unknown",
+) -> Optional[float]:
+    covered = [(gt, pred) for gt, pred in zip(gt_values, pred_values) if pred != unknown_label]
+    if not covered:
+        return None
+    correct = sum(1 for gt, pred in covered if gt == pred)
+    return round(100.0 * correct / len(covered), 2)
+
+
 def _resolve_panel_path(
     panel_path_raw: str,
     dataset_dir: Path,
@@ -397,10 +497,158 @@ def _extract_gt_properties(
     return gt
 
 
+def _map_pdf_material(raw_value: Any) -> str:
+    mapping = {
+        "wood": "wood",
+        "metal": "metal",
+        "glass": "glass",
+        "plastic": "plastic",
+        "fabric": "fabric",
+        "paper": "paper/cardboard",
+        "cardboard": "paper/cardboard",
+        "ceramic": "ceramic/stone",
+        "stone": "ceramic/stone",
+        "rubber": "rubber",
+        "leather": "leather",
+        "unknown": "unknown",
+    }
+    token = _normalize_token(str(raw_value)) if raw_value is not None else "unknown"
+    return mapping.get(token, "other")
+
+
+def _map_pdf_reflectance(raw_value: Any) -> str:
+    token = _normalize_token(str(raw_value)) if raw_value is not None else "unknown"
+    if token == "matte":
+        return "matte"
+    if token in {"glossy", "semi_glossy", "very_glossy"}:
+        return "glossy"
+    return "unknown"
+
+
+def _map_pdf_surface_roughness(raw_value: Any) -> str:
+    token = _normalize_token(str(raw_value)) if raw_value is not None else "unknown"
+    if token in {"smooth", "very_smooth"}:
+        return "smooth"
+    if token in {"rough", "very_rough"}:
+        return "rough"
+    return "unknown"
+
+
+def _map_pdf_rigidity(raw_value: Any) -> str:
+    token = _normalize_token(str(raw_value)) if raw_value is not None else "unknown"
+    if token == "rigid":
+        return "rigid"
+    if token in {"flexible", "floppy"}:
+        return "deformable"
+    return "unknown"
+
+
+def _map_pdf_fragility(intrinsic: Dict[str, Any], affordance: Dict[str, Any]) -> str:
+    breakable = affordance.get("breakable")
+    if isinstance(breakable, bool):
+        return "fragile" if breakable else "not_fragile"
+
+    token = _normalize_token(str(intrinsic.get("brittleness_class"))) if intrinsic.get("brittleness_class") is not None else "unknown"
+    if token in {"brittle", "very_brittle", "slightly_brittle"}:
+        return "fragile"
+    if token == "non_brittle":
+        return "not_fragile"
+    return "unknown"
+
+
+def _map_pdf_state(state_payload: Dict[str, Any]) -> str:
+    is_dirty = state_payload.get("is_dirty")
+    if isinstance(is_dirty, bool):
+        return "dirty" if is_dirty else "clean"
+    return "unknown"
+
+
+def _map_pdf_weight_hint(raw_value: Any) -> str:
+    token = _normalize_token(str(raw_value)) if raw_value is not None else "unknown"
+    if token in {"very_light", "light"}:
+        return "light"
+    if token in {"heavy", "very_heavy"}:
+        return "heavy"
+    return "unknown"
+
+
+def _map_pdf_temperature_hint(raw_value: Any) -> str:
+    token = _normalize_token(str(raw_value)) if raw_value is not None else "unknown"
+    if token in {"hot", "warm"}:
+        return "hot"
+    if token in {"cold", "chilled", "frozen"}:
+        return "cold"
+    if token in {"room", "room_temp"}:
+        return "room"
+    return "unknown"
+
+
+def _map_pdf_phase(raw_value: Any) -> str:
+    token = _normalize_token(str(raw_value)) if raw_value is not None else "unknown"
+    if token in {"solid", "liquid", "gas"}:
+        return token
+    return "unknown"
+
+
+def _map_pdf_filled_state(raw_value: Any) -> str:
+    token = _normalize_token(str(raw_value)) if raw_value is not None else "unknown"
+    if token == "empty":
+        return "empty"
+    if token in {"almost_empty", "half_full", "almost_full"}:
+        return "partially_filled"
+    if token == "full":
+        return "filled"
+    return "unknown"
+
+
+def _map_pdf_slipperiness_hint(raw_value: Any) -> str:
+    token = _normalize_token(str(raw_value)) if raw_value is not None else "unknown"
+    if token == "slippery":
+        return "slippery"
+    if token == "high":
+        return "not_slippery"
+    return "unknown"
+
+
+def extract_pdf_protocol_properties(
+    record: Dict[str, Any],
+    property_specs: Dict[str, PropertySpec],
+) -> Dict[str, Any]:
+    groups = record.get("groups", {})
+    if not isinstance(groups, dict):
+        groups = {}
+
+    intrinsic = groups.get("intrinsic", {}) if isinstance(groups.get("intrinsic"), dict) else {}
+    state = groups.get("state", {}) if isinstance(groups.get("state"), dict) else {}
+    affordance = groups.get("affordance", {}) if isinstance(groups.get("affordance"), dict) else {}
+
+    compact_values = {
+        "material": _map_pdf_material(intrinsic.get("main_material")),
+        "transparency": _normalize_token(str(intrinsic.get("transparency_class"))) if intrinsic.get("transparency_class") is not None else "unknown",
+        "reflectance": _map_pdf_reflectance(intrinsic.get("glossiness_class")),
+        "surface_roughness": _map_pdf_surface_roughness(intrinsic.get("surface_roughness_class")),
+        "rigidity": _map_pdf_rigidity(intrinsic.get("rigidity_class")),
+        "fragility": _map_pdf_fragility(intrinsic, affordance),
+        "wetness": "unknown",
+        "state": _map_pdf_state(state),
+        "weight_hint": _map_pdf_weight_hint(intrinsic.get("mass_class")),
+        "temperature_hint": _map_pdf_temperature_hint(state.get("object_temperature_class")),
+        "phase": _map_pdf_phase(intrinsic.get("state_of_matter")),
+        "filled_state": _map_pdf_filled_state(state.get("fill_state_class")),
+        "slipperiness_hint": _map_pdf_slipperiness_hint(intrinsic.get("friction_class")),
+    }
+
+    return {
+        key: normalize_value(spec, compact_values.get(key))
+        for key, spec in property_specs.items()
+    }
+
+
 def load_abo150_samples(
     annotations_path: Path,
     dataset_dir: Path,
     property_specs: Dict[str, PropertySpec],
+    protocol_name: str = "expanded_ontology",
     max_samples: Optional[int] = None,
     random_seed: int = 42,
 ) -> List[Dict[str, Any]]:
@@ -435,7 +683,11 @@ def load_abo150_samples(
                 "path": str(panel_path),
                 "split": record.get("split"),
                 "caption": record.get("caption"),
-                "gt_properties": _extract_gt_properties(record, property_specs),
+                "gt_properties": (
+                    extract_pdf_protocol_properties(record, property_specs)
+                    if protocol_name == "pdf_compact"
+                    else _extract_gt_properties(record, property_specs)
+                ),
             }
 
             mask_path = None
@@ -530,7 +782,10 @@ def parse_model_output(raw_text: str) -> Tuple[Optional[Dict[str, Any]], Optiona
 
 
 def _fetch_pred_raw_value(parsed_json: Dict[str, Any], key: str) -> Any:
-    group, name = key.split(".", 1)
+    if "." in key:
+        group, name = key.split(".", 1)
+    else:
+        group, name = None, key
 
     if key in parsed_json:
         return parsed_json[key]
@@ -541,13 +796,13 @@ def _fetch_pred_raw_value(parsed_json: Dict[str, Any], key: str) -> Any:
     if isinstance(props, dict):
         if key in props:
             return props[key]
-        g_payload = props.get(group)
+        g_payload = props.get(group) if group is not None else None
         if isinstance(g_payload, dict) and name in g_payload:
             return g_payload[name]
 
     groups = parsed_json.get("groups", {})
     if isinstance(groups, dict):
-        g_payload = groups.get(group)
+        g_payload = groups.get(group) if group is not None else None
         if isinstance(g_payload, dict) and name in g_payload:
             return g_payload[name]
 
@@ -702,6 +957,184 @@ Rules:
 """.strip()
 
 
+def build_demo_response_payload(
+    image_id: str,
+    selected_keys: Sequence[str],
+    gt_properties: Dict[str, Any],
+    property_specs: Dict[str, PropertySpec],
+) -> Dict[str, Any]:
+    props: Dict[str, Any] = {}
+    for key in selected_keys:
+        spec = property_specs[key]
+        default = [] if spec.value_type == "multi_categorical" else "unknown"
+        props[key] = gt_properties.get(key, default)
+    return {
+        "image_id": image_id,
+        "primary_object": "object",
+        "properties": props,
+        "notes": "reference example",
+    }
+
+
+def select_few_shot_examples(
+    current_image_id: str,
+    samples: Sequence[Dict[str, Any]],
+    property_specs: Dict[str, PropertySpec],
+    few_shot_k: int,
+    selected_keys: Sequence[str],
+    property_key: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    if few_shot_k <= 0:
+        return []
+
+    scored: List[Tuple[int, str, Dict[str, Any]]] = []
+    for sample in samples:
+        image_id = str(sample.get("image_id"))
+        if image_id == current_image_id:
+            continue
+
+        gt_props = sample.get("gt_properties", {})
+        if property_key is not None:
+            score = int(is_known_value(property_specs[property_key], gt_props.get(property_key)))
+        else:
+            score = sum(
+                1
+                for key in selected_keys
+                if is_known_value(property_specs[key], gt_props.get(key))
+            )
+        if score <= 0:
+            continue
+        scored.append((score, image_id, sample))
+
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [sample for _, _, sample in scored[:few_shot_k]]
+
+
+def build_joint_few_shot_messages(
+    image_id: str,
+    image: Image.Image,
+    prompt: str,
+    demos: Sequence[Dict[str, Any]],
+    property_specs: Dict[str, PropertySpec],
+    selected_keys: Sequence[str],
+    variant: str,
+    mask_background_mode: str,
+) -> Tuple[List[Dict[str, Any]], List[Image.Image]]:
+    messages: List[Dict[str, Any]] = []
+    images: List[Image.Image] = []
+
+    for demo in demos:
+        demo_prompt = build_prompt_for_sample(
+            image_id=str(demo["image_id"]),
+            selected_keys=list(selected_keys),
+            property_specs=property_specs,
+        )
+        demo_image = load_variant_image(
+            sample_meta=demo,
+            variant=variant,
+            mask_background_mode=mask_background_mode,
+        )
+        demo_payload = build_demo_response_payload(
+            image_id=str(demo["image_id"]),
+            selected_keys=selected_keys,
+            gt_properties=demo.get("gt_properties", {}),
+            property_specs=property_specs,
+        )
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": demo_prompt},
+                ],
+            }
+        )
+        messages.append(
+            {
+                "role": "assistant",
+                "content": json.dumps(demo_payload, ensure_ascii=False),
+            }
+        )
+        images.append(demo_image)
+
+    messages.append(
+        {
+            "role": "user",
+            "content": [
+                {"type": "image"},
+                {"type": "text", "text": prompt},
+            ],
+        }
+    )
+    images.append(image)
+    return messages, images
+
+
+def build_per_property_few_shot_messages(
+    image_id: str,
+    image: Image.Image,
+    property_key: str,
+    spec: PropertySpec,
+    demos: Sequence[Dict[str, Any]],
+    property_specs: Dict[str, PropertySpec],
+    variant: str,
+    mask_background_mode: str,
+) -> Tuple[List[Dict[str, Any]], List[Image.Image]]:
+    messages: List[Dict[str, Any]] = []
+    images: List[Image.Image] = []
+
+    for demo in demos:
+        demo_prompt = build_single_property_prompt(
+            image_id=str(demo["image_id"]),
+            property_key=property_key,
+            spec=spec,
+        )
+        demo_image = load_variant_image(
+            sample_meta=demo,
+            variant=variant,
+            mask_background_mode=mask_background_mode,
+        )
+        demo_payload = build_demo_response_payload(
+            image_id=str(demo["image_id"]),
+            selected_keys=[property_key],
+            gt_properties=demo.get("gt_properties", {}),
+            property_specs=property_specs,
+        )
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image"},
+                    {"type": "text", "text": demo_prompt},
+                ],
+            }
+        )
+        messages.append(
+            {
+                "role": "assistant",
+                "content": json.dumps(demo_payload, ensure_ascii=False),
+            }
+        )
+        images.append(demo_image)
+
+    prompt = build_single_property_prompt(
+        image_id=image_id,
+        property_key=property_key,
+        spec=spec,
+    )
+    messages.append(
+        {
+            "role": "user",
+            "content": [
+                {"type": "image"},
+                {"type": "text", "text": prompt},
+            ],
+        }
+    )
+    images.append(image)
+    return messages, images
+
+
 def make_bnb_config(use_4bit: bool):
     if BitsAndBytesConfig is None:
         return None
@@ -759,33 +1192,41 @@ def load_hf_chat_runtime(name: str, cfg: Dict[str, Any]) -> VLMRuntime:
         gen_kwargs=gen_kwargs,
     )
 
+def infer_hf_chat_messages(
+    runtime: VLMRuntime,
+    messages: Sequence[Dict[str, Any]],
+    images: Sequence[Image.Image],
+) -> str:
+    if not images:
+        raise ValueError("images must not be empty")
 
-def infer_hf_chat(runtime: VLMRuntime, image: Image.Image, prompt: str) -> str:
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {"type": "image"},
-                {"type": "text", "text": prompt},
-            ],
-        }
-    ]
+    image_input: Any = images[0] if len(images) == 1 else list(images)
 
     if hasattr(runtime.processor, "apply_chat_template"):
         try:
             text = runtime.processor.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
+                list(messages), tokenize=False, add_generation_prompt=True
             )
         except TypeError:
             text = runtime.processor.apply_chat_template(
-                messages, add_generation_prompt=True
+                list(messages), add_generation_prompt=True
             )
     else:
-        text = prompt
+        last_user_text = None
+        for message in reversed(messages):
+            if message.get("role") != "user":
+                continue
+            for chunk in message.get("content", []):
+                if isinstance(chunk, dict) and chunk.get("type") == "text":
+                    last_user_text = chunk.get("text")
+                    break
+            if last_user_text is not None:
+                break
+        text = last_user_text or ""
 
     inputs = runtime.processor(
         text=text,
-        images=image,
+        images=image_input,
         return_tensors="pt",
         truncation=False,
     )
@@ -802,6 +1243,19 @@ def infer_hf_chat(runtime: VLMRuntime, image: Image.Image, prompt: str) -> str:
     input_len = inputs["input_ids"].shape[1]
     gen_tokens = out[:, input_len:]
     return runtime.processor.batch_decode(gen_tokens, skip_special_tokens=True)[0]
+
+
+def infer_hf_chat(runtime: VLMRuntime, image: Image.Image, prompt: str) -> str:
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image"},
+                {"type": "text", "text": prompt},
+            ],
+        }
+    ]
+    return infer_hf_chat_messages(runtime=runtime, messages=messages, images=[image])
 
 
 def infer_hf_chat_batch(runtime: VLMRuntime, image: Image.Image, prompts: Sequence[str]) -> List[str]:
@@ -875,6 +1329,7 @@ def infer_hf_chat_batch(runtime: VLMRuntime, image: Image.Image, prompts: Sequen
 BACKEND_LOADERS = {"hf_chat": load_hf_chat_runtime}
 BACKEND_INFER = {"hf_chat": infer_hf_chat}
 BACKEND_INFER_BATCH = {"hf_chat": infer_hf_chat_batch}
+BACKEND_INFER_MESSAGES = {"hf_chat": infer_hf_chat_messages}
 
 
 def load_runtime(model_key: str, model_registry: Dict[str, Dict[str, Any]]) -> VLMRuntime:
@@ -887,6 +1342,31 @@ def load_runtime(model_key: str, model_registry: Dict[str, Dict[str, Any]]) -> V
 
 def infer_runtime(runtime: VLMRuntime, image: Image.Image, prompt: str) -> str:
     return BACKEND_INFER[runtime.backend](runtime, image, prompt)
+
+
+def infer_runtime_messages(
+    runtime: VLMRuntime,
+    messages: Sequence[Dict[str, Any]],
+    images: Sequence[Image.Image],
+) -> str:
+    fn = BACKEND_INFER_MESSAGES.get(runtime.backend)
+    if fn is not None:
+        return fn(runtime, messages, images)
+
+    last_prompt = ""
+    for message in reversed(messages):
+        if message.get("role") != "user":
+            continue
+        for chunk in message.get("content", []):
+            if isinstance(chunk, dict) and chunk.get("type") == "text":
+                last_prompt = str(chunk.get("text") or "")
+                break
+        if last_prompt:
+            break
+    image = images[-1] if images else None
+    if image is None:
+        raise ValueError("images must not be empty")
+    return infer_runtime(runtime, image, last_prompt)
 
 
 def infer_runtime_batch(runtime: VLMRuntime, image: Image.Image, prompts: Sequence[str]) -> List[str]:
@@ -923,6 +1403,37 @@ def apply_mask_to_image(image: Image.Image, mask: Image.Image, bg_mode: str = "b
     return Image.fromarray(out, mode="RGB")
 
 
+def apply_mask_overlay_to_image(
+    image: Image.Image,
+    mask: Image.Image,
+    tint_rgb: Tuple[int, int, int] = (255, 96, 96),
+    tint_alpha: float = 0.22,
+    boundary_rgb: Tuple[int, int, int] = (255, 32, 32),
+) -> Image.Image:
+    rgb = np.asarray(image.convert("RGB"), dtype=np.uint8)
+    m = np.asarray(mask.convert("L"), dtype=np.uint8) > 127
+    out = rgb.astype(np.float32)
+
+    if m.any():
+        tint = np.asarray(tint_rgb, dtype=np.float32)
+        out[m] = (1.0 - tint_alpha) * out[m] + tint_alpha * tint
+
+        up = np.zeros_like(m)
+        down = np.zeros_like(m)
+        left = np.zeros_like(m)
+        right = np.zeros_like(m)
+        up[1:] = m[:-1]
+        down[:-1] = m[1:]
+        left[:, 1:] = m[:, :-1]
+        right[:, :-1] = m[:, 1:]
+        interior = m & up & down & left & right
+        boundary = m & (~interior)
+        out[boundary] = np.asarray(boundary_rgb, dtype=np.float32)
+
+    out = np.clip(out, 0, 255).astype(np.uint8)
+    return Image.fromarray(out, mode="RGB")
+
+
 def load_variant_image(sample_meta: Dict[str, Any], variant: str, mask_background_mode: str) -> Image.Image:
     image_path = Path(sample_meta["path"])
     image = Image.open(image_path).convert("RGB")
@@ -935,6 +1446,12 @@ def load_variant_image(sample_meta: Dict[str, Any], variant: str, mask_backgroun
             raise FileNotFoundError("mask_path is missing in sample metadata")
         mask = Image.open(Path(mask_path)).convert("L")
         return apply_mask_to_image(image, mask, bg_mode=mask_background_mode)
+    if variant == "mask_overlay":
+        mask_path = sample_meta.get("mask_path")
+        if not mask_path:
+            raise FileNotFoundError("mask_path is missing in sample metadata")
+        mask = Image.open(Path(mask_path)).convert("L")
+        return apply_mask_overlay_to_image(image, mask)
     raise ValueError(f"Unknown variant: {variant}")
 
 
@@ -945,11 +1462,13 @@ def _column_prefix(property_key: str) -> str:
 def evaluate_one(
     runtime: VLMRuntime,
     sample_meta: Dict[str, Any],
+    few_shot_pool: Sequence[Dict[str, Any]],
     property_specs: Dict[str, PropertySpec],
     variant: str,
     prompt_mode: str,
     property_batch_size: int,
     include_only_gt_known: bool,
+    few_shot_k: int,
     max_properties_per_sample: Optional[int],
     mask_background_mode: str,
     save_raw_output: bool,
@@ -981,6 +1500,7 @@ def evaluate_one(
     image_id_match_count = 0
     primary_object_pred = None
     notes_pred = None
+    few_shot_demo_ids: List[str] = []
 
     if prompt_mode == "joint":
         prompt = build_prompt_for_sample(
@@ -988,7 +1508,28 @@ def evaluate_one(
             selected_keys=selected_keys,
             property_specs=property_specs,
         )
-        raw = infer_runtime(runtime, image, prompt)
+        if few_shot_k > 0:
+            demos = select_few_shot_examples(
+                current_image_id=image_id,
+                samples=few_shot_pool,
+                property_specs=property_specs,
+                few_shot_k=few_shot_k,
+                selected_keys=selected_keys,
+            )
+            few_shot_demo_ids = [str(x["image_id"]) for x in demos]
+            messages, images = build_joint_few_shot_messages(
+                image_id=image_id,
+                image=image,
+                prompt=prompt,
+                demos=demos,
+                property_specs=property_specs,
+                selected_keys=selected_keys,
+                variant=variant,
+                mask_background_mode=mask_background_mode,
+            )
+            raw = infer_runtime_messages(runtime, messages, images)
+        else:
+            raw = infer_runtime(runtime, image, prompt)
         parsed_json, parse_error = parse_model_output(raw)
         pred = normalize_pred(parsed_json, property_specs)
 
@@ -1009,17 +1550,29 @@ def evaluate_one(
     elif prompt_mode == "per_property":
         raw_map: Dict[str, str] = {}
 
-        for key_chunk in chunked(selected_keys, property_batch_size):
-            prompt_chunk = [
-                build_single_property_prompt(
+        if few_shot_k > 0:
+            for key in selected_keys:
+                demos = select_few_shot_examples(
+                    current_image_id=image_id,
+                    samples=few_shot_pool,
+                    property_specs=property_specs,
+                    few_shot_k=few_shot_k,
+                    selected_keys=[key],
+                    property_key=key,
+                )
+                if not few_shot_demo_ids:
+                    few_shot_demo_ids = [str(x["image_id"]) for x in demos]
+                messages, images = build_per_property_few_shot_messages(
                     image_id=image_id,
+                    image=image,
                     property_key=key,
                     spec=property_specs[key],
+                    demos=demos,
+                    property_specs=property_specs,
+                    variant=variant,
+                    mask_background_mode=mask_background_mode,
                 )
-                for key in key_chunk
-            ]
-            raw_chunk = infer_runtime_batch(runtime, image, prompt_chunk)
-            for key, raw in zip(key_chunk, raw_chunk):
+                raw = infer_runtime_messages(runtime, messages, images)
                 raw_map[key] = raw
 
                 parsed_json, parse_error = parse_model_output(raw)
@@ -1041,6 +1594,39 @@ def evaluate_one(
                         _fetch_pred_raw_value(parsed_json, key),
                     )
                     pred_props[key] = pred_val
+        else:
+            for key_chunk in chunked(selected_keys, property_batch_size):
+                prompt_chunk = [
+                    build_single_property_prompt(
+                        image_id=image_id,
+                        property_key=key,
+                        spec=property_specs[key],
+                    )
+                    for key in key_chunk
+                ]
+                raw_chunk = infer_runtime_batch(runtime, image, prompt_chunk)
+                for key, raw in zip(key_chunk, raw_chunk):
+                    raw_map[key] = raw
+
+                    parsed_json, parse_error = parse_model_output(raw)
+                    if parse_error:
+                        parse_errors.append(f"{key}: {parse_error}")
+                    else:
+                        valid_json_count += 1
+
+                    if isinstance(parsed_json, dict):
+                        if str(parsed_json.get("image_id")).strip() == image_id:
+                            image_id_match_count += 1
+                        if primary_object_pred is None and parsed_json.get("primary_object") is not None:
+                            primary_object_pred = parsed_json.get("primary_object")
+                        if notes_pred is None and parsed_json.get("notes") is not None:
+                            notes_pred = parsed_json.get("notes")
+
+                        pred_val = normalize_value(
+                            property_specs[key],
+                            _fetch_pred_raw_value(parsed_json, key),
+                        )
+                        pred_props[key] = pred_val
 
         raw_output_payload = raw_map
     else:
@@ -1099,6 +1685,8 @@ def evaluate_one(
         "expected_response_count": expected_response_count,
         "requested_property_keys": "|".join(selected_keys),
         "prompt_mode": prompt_mode,
+        "few_shot_k": int(few_shot_k),
+        "few_shot_demo_ids": "|".join(few_shot_demo_ids),
     }
 
     for key, spec in property_specs.items():
@@ -1134,6 +1722,7 @@ def run_validation(
     prompt_mode: str = "joint",
     property_batch_size: int = 8,
     include_only_gt_known: bool = True,
+    few_shot_k: int = 0,
     max_properties_per_sample: Optional[int] = None,
     mask_background_mode: str = "black",
     save_raw_output: bool = True,
@@ -1150,11 +1739,13 @@ def run_validation(
                 row = evaluate_one(
                     runtime=runtime,
                     sample_meta=sample_meta,
+                    few_shot_pool=samples,
                     property_specs=property_specs,
                     variant=variant,
                     prompt_mode=prompt_mode,
                     property_batch_size=property_batch_size,
                     include_only_gt_known=include_only_gt_known,
+                    few_shot_k=few_shot_k,
                     max_properties_per_sample=max_properties_per_sample,
                     mask_background_mode=mask_background_mode,
                     save_raw_output=save_raw_output,
@@ -1189,6 +1780,8 @@ def run_validation(
                     "expected_response_count": 0,
                     "requested_property_keys": "",
                     "prompt_mode": prompt_mode,
+                    "few_shot_k": int(few_shot_k),
+                    "few_shot_demo_ids": "",
                 }
 
                 gt_props = sample_meta.get("gt_properties", {})
@@ -1228,6 +1821,16 @@ def build_property_metrics(df: pd.DataFrame, property_specs: Dict[str, PropertyS
         missed = int(df[f"{col}_missed_when_gt_known"].sum())
         extracted_when_gt_known = int(gt_known - missed)
         exact = int(df[f"{col}_exact_match"].sum())
+        gt_known_mask = df[f"{col}_gt_known"].fillna(False).astype(bool)
+        gt_values = df.loc[gt_known_mask, f"{col}_gt"].astype(str).tolist()
+        pred_values = df.loc[gt_known_mask, f"{col}_pred"].astype(str).tolist()
+
+        accuracy_pct = _compute_accuracy_pct(gt_values, pred_values)
+        selective_accuracy_pct = _compute_selective_accuracy_pct(gt_values, pred_values)
+        macro_f1_pct: Optional[float] = None
+        if spec.value_type in {"categorical", "boolean"}:
+            labels = [x for x in spec.allowed_values if x != "unknown"]
+            macro_f1_pct = _compute_macro_f1_pct(gt_values, pred_values, labels)
 
         metrics.append(
             {
@@ -1237,12 +1840,16 @@ def build_property_metrics(df: pd.DataFrame, property_specs: Dict[str, PropertyS
                 "pred_yes_count": pred_yes,
                 "pred_no_count": pred_no,
                 "pred_yes_pct": round(100.0 * pred_yes / total, 2) if total else 0.0,
+                "coverage_pct": round(100.0 * pred_yes / total, 2) if total else 0.0,
                 "gt_known_count": gt_known,
                 "extracted_when_gt_known": extracted_when_gt_known,
                 "missed_when_gt_known": missed,
                 "coverage_on_gt_known_pct": round(100.0 * extracted_when_gt_known / gt_known, 2)
                 if gt_known
                 else None,
+                "accuracy_pct": accuracy_pct,
+                "macro_f1_pct": macro_f1_pct,
+                "selective_accuracy_pct": selective_accuracy_pct,
                 "exact_match_on_gt_known_pct": round(100.0 * exact / gt_known, 2)
                 if gt_known
                 else None,
@@ -1274,6 +1881,14 @@ def log_report_to_comet(
         f"{model_key}/{variant}/valid_json_pct": summary["valid_json_pct"],
         f"{model_key}/{variant}/image_id_match_pct": summary["image_id_match_pct"],
     }
+    for key in [
+        "mean_coverage_pct",
+        "mean_accuracy_pct",
+        "mean_macro_f1_pct",
+        "mean_selective_accuracy_pct",
+    ]:
+        if summary.get(key) is not None:
+            summary_metrics[f"{model_key}/{variant}/{key}"] = summary[key]
     if summary.get("valid_json_all_pct") is not None:
         summary_metrics[f"{model_key}/{variant}/valid_json_all_pct"] = summary["valid_json_all_pct"]
     if summary.get("image_id_match_all_pct") is not None:
@@ -1288,7 +1903,11 @@ def log_report_to_comet(
         prop = _safe_metric_key(str(row["property"]))
         for col in [
             "pred_yes_pct",
+            "coverage_pct",
             "coverage_on_gt_known_pct",
+            "accuracy_pct",
+            "macro_f1_pct",
+            "selective_accuracy_pct",
             "exact_match_on_gt_known_pct",
             "pred_yes_count",
             "pred_no_count",
@@ -1339,6 +1958,7 @@ def save_report(
         "model_id": model_registry[model_key]["model_id"],
         "variant": variant,
         "prompt_mode": str(df["prompt_mode"].iloc[0]) if "prompt_mode" in df.columns and len(df) else "unknown",
+        "few_shot_k": int(df["few_shot_k"].iloc[0]) if "few_shot_k" in df.columns and len(df) else 0,
         "num_samples": int(len(df)),
         "valid_json_count": int(df["has_valid_json"].sum()),
         "valid_json_pct": round(100.0 * float(df["has_valid_json"].mean()), 2) if len(df) else 0.0,
@@ -1354,6 +1974,27 @@ def save_report(
         "image_id_match_all_pct": (
             round(100.0 * float(df["image_id_matched_all"].mean()), 2)
             if "image_id_matched_all" in df.columns and len(df)
+            else None
+        ),
+        "mean_coverage_pct": (
+            round(float(property_metrics["coverage_pct"].dropna().mean()), 2)
+            if "coverage_pct" in property_metrics.columns and len(property_metrics)
+            else None
+        ),
+        "mean_accuracy_pct": (
+            round(float(property_metrics["accuracy_pct"].dropna().mean()), 2)
+            if "accuracy_pct" in property_metrics.columns and property_metrics["accuracy_pct"].notna().any()
+            else None
+        ),
+        "mean_macro_f1_pct": (
+            round(float(property_metrics["macro_f1_pct"].dropna().mean()), 2)
+            if "macro_f1_pct" in property_metrics.columns and property_metrics["macro_f1_pct"].notna().any()
+            else None
+        ),
+        "mean_selective_accuracy_pct": (
+            round(float(property_metrics["selective_accuracy_pct"].dropna().mean()), 2)
+            if "selective_accuracy_pct" in property_metrics.columns
+            and property_metrics["selective_accuracy_pct"].notna().any()
             else None
         ),
     }
@@ -1402,7 +2043,10 @@ def get_available_variants(
     variants: List[str] = []
     if "raw" in requested_variants:
         variants.append("raw")
-    if "masked" in requested_variants and any("mask_path" in x for x in samples):
+    has_masks = any("mask_path" in x for x in samples)
+    if "mask_overlay" in requested_variants and has_masks:
+        variants.append("mask_overlay")
+    if "masked" in requested_variants and has_masks:
         variants.append("masked")
     return variants
 
@@ -1417,6 +2061,7 @@ def run_many_models(
     prompt_mode: str = "joint",
     property_batch_size: int = 8,
     include_only_gt_known: bool = True,
+    few_shot_k: int = 0,
     max_properties_per_sample: Optional[int] = None,
     mask_background_mode: str = "black",
     save_raw_output: bool = True,
@@ -1425,7 +2070,7 @@ def run_many_models(
     comet_experiment=None,
 ) -> pd.DataFrame:
     if variants is None:
-        variants = get_available_variants(["raw", "masked"], samples)
+        variants = get_available_variants(["raw", "mask_overlay", "masked"], samples)
 
     rows: List[Dict[str, Any]] = []
     for model_key in model_keys:
@@ -1440,6 +2085,7 @@ def run_many_models(
                 prompt_mode=prompt_mode,
                 property_batch_size=property_batch_size,
                 include_only_gt_known=include_only_gt_known,
+                few_shot_k=few_shot_k,
                 max_properties_per_sample=max_properties_per_sample,
                 mask_background_mode=mask_background_mode,
                 save_raw_output=save_raw_output,
@@ -1462,11 +2108,16 @@ def run_many_models(
                         "variant": variant,
                         "prompt_mode": prompt_mode,
                         "property_batch_size": property_batch_size,
+                        "few_shot_k": few_shot_k,
                         "property": r["property"],
                         "group": r["group"],
                         "value_type": r["value_type"],
                         "pred_yes_pct": r["pred_yes_pct"],
+                        "coverage_pct": r["coverage_pct"],
                         "coverage_on_gt_known_pct": r["coverage_on_gt_known_pct"],
+                        "accuracy_pct": r["accuracy_pct"],
+                        "macro_f1_pct": r["macro_f1_pct"],
+                        "selective_accuracy_pct": r["selective_accuracy_pct"],
                         "exact_match_on_gt_known_pct": r["exact_match_on_gt_known_pct"],
                         "num_samples": summary["num_samples"],
                     }

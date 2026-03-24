@@ -1,0 +1,14 @@
+property,group,value_type,pred_yes_count,pred_no_count,pred_yes_pct,coverage_pct,gt_known_count,extracted_when_gt_known,missed_when_gt_known,coverage_on_gt_known_pct,accuracy_pct,macro_f1_pct,selective_accuracy_pct,exact_match_on_gt_known_pct
+material,pdf_compact,categorical,0,5,0.0,0.0,5,0,5,0.0,0.0,0.0,,0.0
+transparency,pdf_compact,categorical,0,5,0.0,0.0,5,0,5,0.0,0.0,0.0,,0.0
+reflectance,pdf_compact,categorical,0,5,0.0,0.0,5,0,5,0.0,0.0,0.0,,0.0
+surface_roughness,pdf_compact,categorical,0,5,0.0,0.0,4,0,4,0.0,0.0,0.0,,0.0
+rigidity,pdf_compact,categorical,0,5,0.0,0.0,4,0,4,0.0,0.0,0.0,,0.0
+fragility,pdf_compact,categorical,0,5,0.0,0.0,5,0,5,0.0,0.0,0.0,,0.0
+wetness,pdf_compact,categorical,0,5,0.0,0.0,0,0,0,,,,,
+state,pdf_compact,categorical,0,5,0.0,0.0,5,0,5,0.0,0.0,0.0,,0.0
+weight_hint,pdf_compact,categorical,0,5,0.0,0.0,3,0,3,0.0,0.0,0.0,,0.0
+temperature_hint,pdf_compact,categorical,0,5,0.0,0.0,5,0,5,0.0,0.0,0.0,,0.0
+phase,pdf_compact,categorical,0,5,0.0,0.0,5,0,5,0.0,0.0,0.0,,0.0
+filled_state,pdf_compact,categorical,0,5,0.0,0.0,0,0,0,,,,,
+slipperiness_hint,pdf_compact,categorical,0,5,0.0,0.0,3,0,3,0.0,0.0,0.0,,0.0
