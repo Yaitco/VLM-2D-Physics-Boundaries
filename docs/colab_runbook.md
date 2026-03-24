@@ -1,7 +1,7 @@
 # Colab Runbook
 
 ## Что это
-Короткая инструкция по запуску основного validation pipeline в Google Colab.
+Короткая инструкция по запуску текущего упрощённого pipeline в Google Colab.
 
 Основной ноутбук:
 [ABO150_Validation_Colab.ipynb](/home/alexander/Projects/VLM-2D-Physics-Boundaries/ABO150_Validation_Colab.ipynb)
@@ -25,75 +25,96 @@
 - `Qwen/Qwen2.5-VL-7B-Instruct`
 - `lmms-lab/LLaVA-OneVision-1.5-8B-Instruct`
 
-лучше ориентироваться на Colab с достаточно большой VRAM.
+лучше использовать Colab с заметным запасом VRAM.
 
 ## Основные настройки в ноутбуке
 
 ### Протокол
 ```python
-PROTOCOL_NAME = "pdf_compact"
+PROTOCOL_NAME = "narrow_core"
 ```
 
-Рекомендуемое значение для baseline по coursework:
+Доступные варианты:
+- `narrow_core`
+- `full_expanded`
 - `pdf_compact`
 
-### Prompt-режим
+Рекомендуемый старт:
+- `narrow_core`
+
+### Модель
 ```python
-PROMPT_MODE = "per_property"
+SELECTED_MODEL = "qwen2_5_vl_7b"
 ```
 
-Рекомендуемый стартовый режим:
-- `per_property`
+### Визуальные варианты
+```python
+EVAL_VARIANTS = ["raw"]
+```
+
+Если у samples нет `mask_path`, реально доступен только `raw`.
 
 ### Zero-shot / few-shot
 ```python
 FEW_SHOT_K = 0
+FEW_SHOT_SELECTION_MODE = "fixed"
 ```
 
 Рекомендуемые значения:
-- `0` для zero-shot
-- `1` или `2` для few-shot baseline
+- `FEW_SHOT_K = 0` для zero-shot baseline
+- `FEW_SHOT_K = 2` для первого few-shot сравнения
+- `FEW_SHOT_SELECTION_MODE = "fixed"` для более быстрого few-shot
 
-### Визуальные варианты
+### Размер батча по свойствам
 ```python
-EVAL_VARIANTS = ["raw", "mask_overlay", "masked"]
+PROPERTY_BATCH_SIZE = 8
 ```
 
-Если masks отсутствуют, реально отработает только `raw`.
+Практически:
+- `8` — безопасный старт
+- `12` или `16` — хороший следующий шаг, если хватает памяти
 
-### Ограничение длины prompt
+### Размер подвыборки
 ```python
-MAX_PROPERTIES_PER_SAMPLE = None
+MAX_SAMPLES = 50
+RANDOM_SEED = 42
 ```
 
-Если используешь `joint`, лучше ограничивать:
-- `24` для `pdf_compact`
-- `32` для `expanded_ontology`
+Так удобно делать быстрые сравнения моделей на одном и том же subset.
 
 ## Рекомендуемый порядок прогонов
 
 ### Первый baseline
 ```python
-PROTOCOL_NAME = "pdf_compact"
-PROMPT_MODE = "per_property"
+PROTOCOL_NAME = "narrow_core"
+SELECTED_MODEL = "qwen2_5_vl_7b"
+EVAL_VARIANTS = ["raw"]
 FEW_SHOT_K = 0
-RUN_MULTI_MODEL = False
-SELECTED_MODEL = "qwen3_vl_8b"
+PROPERTY_BATCH_SIZE = 8
+MAX_SAMPLES = 50
 ```
 
 ### Первый few-shot baseline
 ```python
-PROTOCOL_NAME = "pdf_compact"
-PROMPT_MODE = "per_property"
+PROTOCOL_NAME = "narrow_core"
+SELECTED_MODEL = "qwen2_5_vl_7b"
+EVAL_VARIANTS = ["raw"]
 FEW_SHOT_K = 2
-RUN_MULTI_MODEL = False
-SELECTED_MODEL = "qwen3_vl_8b"
+FEW_SHOT_SELECTION_MODE = "fixed"
+PROPERTY_BATCH_SIZE = 8
+MAX_SAMPLES = 50
 ```
 
 ### Сравнение нескольких моделей
 ```python
 RUN_MULTI_MODEL = True
 MULTI_MODEL_KEYS = ["qwen3_vl_8b", "qwen2_5_vl_7b", "llava_onevision_1_5_8b"]
+```
+
+### Полный протокол для лучших моделей
+```python
+PROTOCOL_NAME = "full_expanded"
+RUN_MULTI_MODEL = False
 ```
 
 ## Что смотреть после прогона
@@ -132,25 +153,29 @@ MULTI_MODEL_KEYS = ["qwen3_vl_8b", "qwen2_5_vl_7b", "llava_onevision_1_5_8b"]
 ## Практические рекомендации
 
 ### Если модель разваливает JSON
-- перейти на `per_property`
-- уменьшить `MAX_PROPERTIES_PER_SAMPLE`
-- проверить `raw_output`
+- смотреть `parse_error`
+- смотреть `raw_output`
+- уменьшать `MAX_SAMPLES` для отладки
 
 ### Если модель слишком часто отвечает `unknown`
 - сравнить zero-shot и few-shot
-- сравнить `raw` и `mask_overlay`
 - смотреть `coverage_pct`, а не только `accuracy_pct`
+- проверить, не включён ли `include_only_gt_known=False` на слишком широком протоколе
 
 ### Если запуск слишком медленный
-- для first pass оставить один `variant`
+- оставить один `variant`
 - начать с `MAX_SAMPLES = 20`
-- помнить, что few-shot `per_property` медленнее zero-shot
+- использовать `FEW_SHOT_SELECTION_MODE = "fixed"`
+- подобрать `PROPERTY_BATCH_SIZE = 8, 12, 16`
 
 ## Минимальный smoke-check
 Перед дорогим полным прогоном полезно:
 - поставить `MAX_SAMPLES = 5`
 - прогнать один `SELECTED_MODEL`
 - убедиться, что отчёты сохраняются и Comet логируется
+
+Локальный аналог для быстрой проверки:
+- [scripts/run_abo150_smoke.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/run_abo150_smoke.py)
 
 ## Связанные документы
 - [docs/validation_pipeline.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/docs/validation_pipeline.md)

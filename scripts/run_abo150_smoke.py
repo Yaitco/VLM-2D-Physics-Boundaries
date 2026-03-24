@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Day-1 smoke run for the ABO150 validation pipeline without downloading a real VLM."""
+"""Smoke run for the structured per-property ABO150 validation pipeline."""
 
 from __future__ import annotations
 
@@ -19,61 +19,23 @@ from scripts import abo150_vlm_validation as val
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run an end-to-end smoke test on ABO150 pipeline.")
-    parser.add_argument(
-        "--dataset-dir",
-        type=Path,
-        default=Path("dataset/abo_150_expanded"),
-        help="Path to ABO150 dataset root.",
-    )
-    parser.add_argument(
-        "--max-samples",
-        type=int,
-        default=5,
-        help="Number of samples for smoke run.",
-    )
-    parser.add_argument(
-        "--reports-dir",
-        type=Path,
-        default=Path("reports_smoke_abo150"),
-        help="Directory where smoke-run reports will be written.",
-    )
-    parser.add_argument(
-        "--prompt-mode",
-        type=str,
-        default="per_property",
-        choices=["joint", "per_property", "grouped"],
-        help="Prompt mode to exercise during the smoke test.",
-    )
-    parser.add_argument(
-        "--property-group-size",
-        type=int,
-        default=4,
-        help="How many properties to ask in one grouped prompt.",
-    )
+    parser.add_argument("--dataset-dir", type=Path, default=Path("dataset/abo_150_expanded"))
+    parser.add_argument("--max-samples", type=int, default=5)
+    parser.add_argument("--reports-dir", type=Path, default=Path("reports_smoke_abo150"))
     parser.add_argument(
         "--protocol-name",
         type=str,
-        default="expanded_ontology",
+        default="narrow_core",
         choices=["expanded_ontology", "full_expanded", "narrow_core", "pdf_compact"],
-        help="Evaluation protocol to exercise during the smoke test.",
     )
-    parser.add_argument(
-        "--include-only-gt-known",
-        action="store_true",
-        help="If passed, request only GT-known properties.",
-    )
-    parser.add_argument(
-        "--few-shot-k",
-        type=int,
-        default=0,
-        help="Number of demo examples to include in few-shot mode.",
-    )
+    parser.add_argument("--include-only-gt-known", action="store_true")
+    parser.add_argument("--property-batch-size", type=int, default=4)
+    parser.add_argument("--few-shot-k", type=int, default=0)
     parser.add_argument(
         "--few-shot-selection-mode",
         type=str,
         default="fixed",
         choices=["fixed", "dynamic"],
-        help="How demo examples are selected for few-shot runs.",
     )
     return parser.parse_args()
 
@@ -83,25 +45,9 @@ def _extract_image_id(prompt: str) -> str:
     return match.group(1) if match else "unknown_image"
 
 
-def _extract_joint_keys(prompt: str) -> List[str]:
-    match = re.search(r"Fill ONLY these property keys:\s*(.+)", prompt)
-    if not match:
-        return []
-    keys = [part.strip() for part in match.group(1).split(",")]
-    return [key for key in keys if key]
-
-
 def _extract_single_key(prompt: str) -> str:
     match = re.search(r'Predict ONLY this property:\s*"([^"]+)"', prompt)
     return match.group(1) if match else ""
-
-
-def _mock_value_for_spec(spec: val.PropertySpec):
-    if spec.value_type == "boolean":
-        return "unknown"
-    if spec.value_type == "multi_categorical":
-        return []
-    return "unknown"
 
 
 def load_mock_runtime(name: str, cfg: Dict[str, object]) -> val.VLMRuntime:
@@ -117,32 +63,18 @@ def load_mock_runtime(name: str, cfg: Dict[str, object]) -> val.VLMRuntime:
 
 def infer_mock(runtime: val.VLMRuntime, image, prompt: str) -> str:
     image_id = _extract_image_id(prompt)
-    keys = _extract_joint_keys(prompt)
-    properties = {}
-    for key in keys:
-        properties[key] = "unknown"
+    property_key = _extract_single_key(prompt)
     payload = {
         "image_id": image_id,
         "primary_object": "object",
-        "properties": properties,
+        "properties": {property_key: "unknown"},
         "notes": "smoke run",
     }
     return json.dumps(payload, ensure_ascii=False)
 
 
 def infer_mock_batch(runtime: val.VLMRuntime, image, prompts: List[str]) -> List[str]:
-    outputs = []
-    for prompt in prompts:
-        image_id = _extract_image_id(prompt)
-        key = _extract_single_key(prompt)
-        payload = {
-            "image_id": image_id,
-            "primary_object": "object",
-            "properties": {key: "unknown"},
-            "notes": "smoke run",
-        }
-        outputs.append(json.dumps(payload, ensure_ascii=False))
-    return outputs
+    return [infer_mock(runtime, image, prompt) for prompt in prompts]
 
 
 def infer_mock_messages(runtime: val.VLMRuntime, messages, images) -> str:
@@ -156,19 +88,14 @@ def infer_mock_messages(runtime: val.VLMRuntime, messages, images) -> str:
                 break
         if last_prompt:
             break
+    return infer_mock(runtime, images[-1] if images else None, last_prompt)
 
-    property_key = _extract_single_key(last_prompt)
-    if property_key:
-        payload = {
-            "image_id": _extract_image_id(last_prompt),
-            "primary_object": "object",
-            "properties": {property_key: "unknown"},
-            "notes": "smoke run",
-        }
-        return json.dumps(payload, ensure_ascii=False)
 
-    fallback_image = images[-1] if images else None
-    return infer_mock(runtime, fallback_image, last_prompt)
+def infer_mock_messages_batch(runtime: val.VLMRuntime, messages_batch, images_batch) -> List[str]:
+    return [
+        infer_mock_messages(runtime, messages, images)
+        for messages, images in zip(messages_batch, images_batch)
+    ]
 
 
 def main() -> None:
@@ -179,7 +106,9 @@ def main() -> None:
 
     property_specs = val.load_protocol_property_specs(
         protocol_name=args.protocol_name,
-        schema_path=schema_path if args.protocol_name in {"expanded_ontology", "full_expanded", "narrow_core"} else None,
+        schema_path=schema_path
+        if args.protocol_name in {"expanded_ontology", "full_expanded", "narrow_core"}
+        else None,
     )
     samples = val.load_abo150_samples(
         annotations_path=annotations_path,
@@ -194,13 +123,9 @@ def main() -> None:
     val.BACKEND_INFER["mock_json"] = infer_mock
     val.BACKEND_INFER_BATCH["mock_json"] = infer_mock_batch
     val.BACKEND_INFER_MESSAGES["mock_json"] = infer_mock_messages
+    val.BACKEND_INFER_MESSAGES_BATCH["mock_json"] = infer_mock_messages_batch
 
-    model_registry = {
-        "mock_json": {
-            "backend": "mock_json",
-            "model_id": "mock://day1_smoke",
-        }
-    }
+    model_registry = {"mock_json": {"backend": "mock_json", "model_id": "mock://smoke"}}
 
     df = val.run_validation(
         model_key="mock_json",
@@ -208,13 +133,10 @@ def main() -> None:
         property_specs=property_specs,
         model_registry=model_registry,
         variant="raw",
-        prompt_mode=args.prompt_mode,
-        property_batch_size=4,
-        property_group_size=args.property_group_size,
+        property_batch_size=args.property_batch_size,
         include_only_gt_known=args.include_only_gt_known,
         few_shot_k=args.few_shot_k,
         few_shot_selection_mode=args.few_shot_selection_mode,
-        max_properties_per_sample=12 if args.prompt_mode == "joint" else None,
         mask_background_mode="black",
         save_raw_output=True,
         json_success_threshold=1.0,

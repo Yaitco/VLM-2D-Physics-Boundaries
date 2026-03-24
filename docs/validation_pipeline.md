@@ -1,22 +1,34 @@
 # Validation Pipeline
 
 ## Назначение
-Этот пайплайн нужен для валидации VLM на задаче извлечения физических свойств объектов из изображений датасета `dataset/abo_150_expanded`.
+Репозиторий теперь использует один основной сценарий валидации: `per_property`.
 
-Основной код лежит в [scripts/abo150_vlm_validation.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/abo150_vlm_validation.py).
+Идея простая:
+- для каждого изображения выбирается список свойств протокола;
+- на каждое свойство отправляется отдельный короткий prompt;
+- ответы нормализуются и сводятся в единый `per_sample_predictions.csv`.
 
-## Что поддерживается сейчас
+Основной код находится в [scripts/abo150_vlm_validation.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/abo150_vlm_validation.py).
+
+## Что поддерживается
 
 ### Протоколы свойств
+- `narrow_core`
+  Узкий набор свойств для быстрых baseline-сравнений.
+  Ключи лежат в [configs/narrow_core_property_keys.yaml](/home/alexander/Projects/VLM-2D-Physics-Boundaries/configs/narrow_core_property_keys.yaml).
+
+- `full_expanded`
+  Полная ontology из `dataset/abo_150_expanded/physics_properties.yaml`.
+
 - `expanded_ontology`
-  Использует полную ontology из `dataset/abo_150_expanded/physics_properties.yaml`.
+  Alias для полного протокола.
 
 - `pdf_compact`
-  Использует компактный набор свойств из PDF coursework.
-  Конфиг: [configs/pdf_protocol_properties.yaml](/home/alexander/Projects/VLM-2D-Physics-Boundaries/configs/pdf_protocol_properties.yaml)
+  Компактный маппинг свойств под coursework-протокол.
+  Конфиг лежит в [configs/pdf_protocol_properties.yaml](/home/alexander/Projects/VLM-2D-Physics-Boundaries/configs/pdf_protocol_properties.yaml).
 
 ### Модели
-Сейчас в общем registry поддерживаются:
+Сейчас в общем registry доступны:
 - `qwen3_vl_8b`
 - `qwen2_5_vl_7b`
 - `llava_onevision_1_5_8b`
@@ -26,136 +38,138 @@
   Исходная панель объекта.
 
 - `mask_overlay`
-  Исходное изображение с подсветкой маски объекта.
+  Исходное изображение с наложенной подсветкой маски.
 
 - `masked`
-  Объект на нейтральном фоне по маске.
+  Объект, вырезанный по маске на однотонный фон.
 
-`mask_overlay` и `masked` доступны только если в metadata есть `mask_path`.
+`mask_overlay` и `masked` доступны только если у sample есть `mask_path`.
 
-### Prompt-режимы
-- `joint`
-  Один запрос на изображение, в котором сразу перечислены несколько свойств.
-
-- `per_property`
-  Отдельный запрос на каждое свойство.
-
-### Shot-режимы
+### Zero-shot и few-shot
 - `few_shot_k = 0`
-  Zero-shot.
+  Обычный zero-shot.
 
 - `few_shot_k > 0`
-  Few-shot с демонстрационными примерами из датасета.
+  Few-shot с демонстрационными примерами из того же subset.
 
-## Общая схема работы
+Поддерживаются два способа выбора demo:
+- `fixed`
+  Один глобальный ранжированный список кандидатов на весь запуск.
+
+- `dynamic`
+  Демонстрации подбираются отдельно под конкретный sample и property.
+
+## Общая схема
 
 ### 1. Загрузка схемы свойств
-Сначала выбирается evaluation protocol:
-- `load_protocol_property_specs("expanded_ontology", ...)`
-- `load_protocol_property_specs("pdf_compact", ...)`
+Функция `load_protocol_property_specs(...)` возвращает словарь `property_specs` для выбранного протокола.
 
-На выходе получаем словарь `property_specs`.
-
-### 2. Загрузка samples
+### 2. Загрузка датасета
 Функция `load_abo150_samples(...)`:
-- читает `selected_150_annotations.jsonl`
-- находит panel image
-- подтягивает `mask_path`, если он есть
-- формирует `gt_properties`
+- читает `selected_150_annotations.jsonl`;
+- резолвит `panel_path`;
+- при наличии подтягивает `mask_path`;
+- строит `gt_properties` в формате выбранного протокола.
 
-Для `pdf_compact` GT сначала маппится из ontology ABO в компактные категории.
+Для `pdf_compact` GT предварительно маппится из ontology ABO в компактные категории.
 
-### 3. Выбор properties для конкретного sample
+### 3. Выбор свойств для sample
 Функция `select_property_keys_for_sample(...)`:
-- либо выбирает только свойства с известным GT
-- либо берёт все свойства протокола
+- берёт все свойства протокола;
+- либо только те, у которых GT известен, если включён `include_only_gt_known=True`.
 
 ### 4. Построение prompt
-- `build_prompt_for_sample(...)` для `joint`
-- `build_single_property_prompt(...)` для `per_property`
+Для каждого свойства строится отдельный короткий prompt:
+- image id;
+- имя свойства;
+- допустимые значения;
+- требуемый JSON-формат ответа.
 
-Если включён few-shot, перед основным запросом добавляются demo-примеры:
-- demo image
-- prompt в том же формате
-- assistant-ответ с эталонным JSON из GT
+Функция: `build_property_prompt(...)`.
 
-### 5. Inference
-Общий runtime интерфейс:
-- `infer_runtime(...)`
+### 5. Few-shot сообщения
+Если `few_shot_k > 0`, перед основным запросом добавляются demo-примеры:
+- demo image;
+- такой же property prompt;
+- assistant-ответ с эталонным JSON из GT.
+
+Для fixed few-shot используется общий кэш кандидатов, чтобы ускорить запуск и вернуть batched inference.
+
+### 6. Inference
+Инференс идёт через единый runtime layer:
+- `load_runtime(...)`
 - `infer_runtime_batch(...)`
-- `infer_runtime_messages(...)`
+- `infer_runtime_messages_batch(...)`
 
-Логика:
-- zero-shot `per_property` использует batch inference
-- few-shot `per_property` идёт последовательно, потому что у каждого свойства свой набор demo-изображений
+Оптимизация сейчас такая:
+- zero-shot per-property идёт батчами;
+- few-shot с `fixed` тоже старается идти батчами;
+- если backend не умеет корректно батчить multi-image conversations, используется безопасный fallback.
 
-### 6. Парсинг и нормализация
+### 7. Парсинг и нормализация
 После ответа модели:
-- извлекается JSON
-- значения нормализуются к allowed enum
-- unknown/empty приводятся к единому формату
+- вытаскивается JSON;
+- значения нормализуются к allowed enum;
+- `unknown` и пустые списки приводятся к единому формату.
 
-### 7. Подсчёт метрик
+### 8. Подсчёт метрик
 На уровне sample считаются:
 - `has_valid_json`
+- `has_valid_json_all`
 - `image_id_matched`
-- `pred_known`
-- `missed_when_gt_known`
-- `exact_match`
+- `image_id_matched_all`
+- `valid_json_ratio`
+- `image_id_match_ratio`
 
-На уровне property считаются:
+На уровне свойства считаются:
+- `pred_yes_pct`
 - `coverage_pct`
+- `coverage_on_gt_known_pct`
 - `accuracy_pct`
 - `macro_f1_pct`
 - `selective_accuracy_pct`
-- `coverage_on_gt_known_pct`
 - `exact_match_on_gt_known_pct`
 
-### 8. Сохранение отчётов
+### 9. Сохранение отчётов
 Для каждого `model_key / variant` сохраняются:
 - `per_sample_predictions.csv`
 - `property_metrics.csv`
 - `summary.json`
 
-## Few-shot: текущая реализация
-
-### Как выбираются demo-примеры
-Используется `select_few_shot_examples(...)`.
-
-Принцип:
-- текущий sample исключается
-- кандидатам считается score по числу known GT
-- выбираются top-k примеров с максимальным score
-
-Для `per_property` score считается по одному свойству.
-Для `joint` score считается по всему списку выбранных свойств.
-
-### Что важно понимать
-- Few-shot сейчас строится из самого evaluation subset.
-- Это удобно для controlled baseline, но методологически это нужно отдельно оговорить в отчёте.
-- Если понадобится жёсткое разделение `support set` и `evaluation set`, это можно добавить отдельным следующим шагом.
-
 ## Основные параметры запуска
-
-Ключевые аргументы `run_validation(...)`:
+Главные аргументы `run_validation(...)`:
 - `model_key`
 - `samples`
 - `property_specs`
 - `variant`
-- `prompt_mode`
 - `property_batch_size`
 - `include_only_gt_known`
 - `few_shot_k`
-- `max_properties_per_sample`
+- `few_shot_selection_mode`
 - `mask_background_mode`
 - `json_success_threshold`
 - `image_id_success_threshold`
 
+## Практические рекомендации
+
+### Быстрый baseline
+- `PROTOCOL_NAME = "narrow_core"`
+- `EVAL_VARIANTS = ["raw"]`
+- `FEW_SHOT_K = 0`
+- `PROPERTY_BATCH_SIZE = 8` или `16`
+
+### Более надёжный comparison
+- фиксировать `MAX_SAMPLES` и `RANDOM_SEED`;
+- сравнивать модели на одном и том же subset;
+- менять за раз только одну ось: модель, few-shot или variant.
+
+### Когда идти в полный протокол
+Сначала выбрать 1–2 лучшие модели на `narrow_core`, потом запускать их на `full_expanded`.
+
 ## Ограничения
-- `wetness` в compact-протоколе сейчас почти всегда `unknown`, потому что в доступной разметке нет устойчивого прямого поля.
-- `temperature_hint`, `phase`, часть `filled_state` слабо вариативны в текущем subset.
-- Few-shot в `per_property` режиме медленнее zero-shot, потому что отключается batch generate.
-- Для real multi-model run модели по-прежнему запускаются последовательно, а не параллельно.
+- `pdf_compact` использует mapping из ontology ABO, поэтому это не “родной” GT, а производный протокол.
+- Few-shot сейчас строится из того же evaluation subset; это нужно явно оговаривать в отчёте.
+- Multi-model запуск всё ещё последовательный по моделям.
 
 ## Что смотреть при отладке
 
@@ -171,8 +185,8 @@
 - `coverage_pct`
 - `selective_accuracy_pct`
 
-### Если есть сомнения в GT compact-протокола
-Смотреть mapping-функции:
+### Если есть сомнения в compact mapping
+Смотреть mapping-функции в [scripts/abo150_vlm_validation.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/abo150_vlm_validation.py):
 - `_map_pdf_material`
 - `_map_pdf_reflectance`
 - `_map_pdf_surface_roughness`
@@ -188,5 +202,5 @@
 ## Связанные файлы
 - [scripts/abo150_vlm_validation.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/abo150_vlm_validation.py)
 - [ABO150_Validation_Colab.ipynb](/home/alexander/Projects/VLM-2D-Physics-Boundaries/ABO150_Validation_Colab.ipynb)
-- [configs/pdf_protocol_properties.yaml](/home/alexander/Projects/VLM-2D-Physics-Boundaries/configs/pdf_protocol_properties.yaml)
 - [scripts/run_abo150_smoke.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/run_abo150_smoke.py)
+- [docs/colab_runbook.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/docs/colab_runbook.md)

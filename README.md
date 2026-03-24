@@ -1,5 +1,7 @@
 # VLM-2D-Physics-Boundaries
 
+Текущая структура репозитория упрощена вокруг одного основного сценария: `per_property` валидация VLM на `ABO150`.
+
 ## Навигация
 - Основной Colab-ноутбук: [ABO150_Validation_Colab.ipynb](/home/alexander/Projects/VLM-2D-Physics-Boundaries/ABO150_Validation_Colab.ipynb)
 - Validation pipeline: [docs/validation_pipeline.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/docs/validation_pipeline.md)

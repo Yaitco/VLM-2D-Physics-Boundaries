@@ -1,9 +1,8 @@
 {
   "model_key": "mock_json",
-  "model_id": "mock://day1_smoke",
+  "model_id": "mock://smoke",
   "variant": "raw",
-  "prompt_mode": "grouped",
-  "property_group_size": 3,
+  "property_batch_size": 4,
   "few_shot_k": 0,
   "few_shot_selection_mode": "fixed",
   "num_samples": 5,
