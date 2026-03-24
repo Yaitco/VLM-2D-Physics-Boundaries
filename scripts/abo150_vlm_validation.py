@@ -237,7 +237,7 @@ def load_property_specs(
                 items = prop_cfg.get("items", {})
                 if not isinstance(items, dict) or items.get("type") != "categorical":
                     continue
-                allowed = _load_allowed_values(items, enums_map)
+                allowed = [value for value in _load_allowed_values(items, enums_map) if value != "unknown"]
                 specs[key] = PropertySpec(
                     key=key,
                     group=group_name,
