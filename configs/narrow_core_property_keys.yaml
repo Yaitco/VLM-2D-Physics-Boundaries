@@ -1,0 +1,17 @@
+name: narrow_core
+description: >
+  A compact subset of the ABO expanded ontology for primary validation runs.
+  The subset emphasizes visually grounded and comparatively diverse properties
+  that are useful for fast baseline comparisons before running the full ontology.
+
+include_keys:
+  - intrinsic.main_material
+  - intrinsic.transparency_class
+  - intrinsic.glossiness_class
+  - intrinsic.surface_roughness_class
+  - intrinsic.shape_class
+  - intrinsic.rigidity_class
+  - intrinsic.friction_class
+  - intrinsic.metallic_appearance
+  - intrinsic.state_of_matter
+  - affordance.breakable

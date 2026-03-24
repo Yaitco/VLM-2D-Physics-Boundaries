@@ -56,6 +56,7 @@ MODEL_REGISTRY = {
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 PDF_COMPACT_SCHEMA_PATH = ROOT_DIR / "configs" / "pdf_protocol_properties.yaml"
+NARROW_CORE_KEYS_PATH = ROOT_DIR / "configs" / "narrow_core_property_keys.yaml"
 
 
 @dataclass
@@ -293,19 +294,51 @@ def load_compact_property_specs(schema_path: Path) -> Dict[str, PropertySpec]:
     return specs
 
 
+def load_property_subset_specs(
+    schema_path: Path,
+    subset_keys_path: Path,
+) -> Dict[str, PropertySpec]:
+    base_specs = load_property_specs(schema_path=schema_path)
+    with subset_keys_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+
+    include_keys = cfg.get("include_keys", [])
+    if not isinstance(include_keys, list) or not include_keys:
+        raise ValueError(f"Invalid subset config: include_keys are missing in {subset_keys_path}")
+
+    subset: Dict[str, PropertySpec] = {}
+    missing: List[str] = []
+    for key in include_keys:
+        key = str(key)
+        spec = base_specs.get(key)
+        if spec is None:
+            missing.append(key)
+            continue
+        subset[key] = spec
+
+    if missing:
+        raise ValueError(f"Unknown property keys in subset config {subset_keys_path}: {missing}")
+    return subset
+
+
 def load_protocol_property_specs(
     protocol_name: str,
     schema_path: Optional[Path] = None,
     include_groups: Optional[Sequence[str]] = None,
 ) -> Dict[str, PropertySpec]:
-    if protocol_name == "expanded_ontology":
+    if protocol_name in {"expanded_ontology", "full_expanded"}:
         if schema_path is None:
-            raise ValueError("schema_path is required for expanded_ontology protocol")
+            raise ValueError("schema_path is required for expanded ontology protocol")
         return load_property_specs(schema_path=schema_path, include_groups=include_groups)
 
     if protocol_name == "pdf_compact":
         compact_path = schema_path or PDF_COMPACT_SCHEMA_PATH
         return load_compact_property_specs(compact_path)
+
+    if protocol_name == "narrow_core":
+        if schema_path is None:
+            raise ValueError("schema_path is required for narrow_core protocol")
+        return load_property_subset_specs(schema_path=schema_path, subset_keys_path=NARROW_CORE_KEYS_PATH)
 
     raise ValueError(f"Unknown protocol_name: {protocol_name}")
 
@@ -982,10 +1015,24 @@ def select_few_shot_examples(
     property_specs: Dict[str, PropertySpec],
     few_shot_k: int,
     selected_keys: Sequence[str],
+    selection_mode: str = "fixed",
+    fixed_candidates: Optional[Sequence[Dict[str, Any]]] = None,
     property_key: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     if few_shot_k <= 0:
         return []
+
+    if selection_mode == "fixed":
+        base_candidates = fixed_candidates if fixed_candidates is not None else samples
+        selected: List[Dict[str, Any]] = []
+        for sample in base_candidates:
+            image_id = str(sample.get("image_id"))
+            if image_id == current_image_id:
+                continue
+            selected.append(sample)
+            if len(selected) >= few_shot_k:
+                break
+        return selected
 
     scored: List[Tuple[int, str, Dict[str, Any]]] = []
     for sample in samples:
@@ -1010,6 +1057,27 @@ def select_few_shot_examples(
     return [sample for _, _, sample in scored[:few_shot_k]]
 
 
+def build_fixed_few_shot_candidates(
+    samples: Sequence[Dict[str, Any]],
+    property_specs: Dict[str, PropertySpec],
+) -> List[Dict[str, Any]]:
+    scored: List[Tuple[int, str, Dict[str, Any]]] = []
+    for sample in samples:
+        image_id = str(sample.get("image_id"))
+        gt_props = sample.get("gt_properties", {})
+        score = sum(
+            1
+            for key, spec in property_specs.items()
+            if is_known_value(spec, gt_props.get(key))
+        )
+        if score <= 0:
+            continue
+        scored.append((score, image_id, sample))
+
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [sample for _, _, sample in scored]
+
+
 def build_joint_few_shot_messages(
     image_id: str,
     image: Image.Image,
@@ -1019,6 +1087,7 @@ def build_joint_few_shot_messages(
     selected_keys: Sequence[str],
     variant: str,
     mask_background_mode: str,
+    image_cache: Optional[Dict[Tuple[str, str, str, str], Image.Image]] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Image.Image]]:
     messages: List[Dict[str, Any]] = []
     images: List[Image.Image] = []
@@ -1029,10 +1098,11 @@ def build_joint_few_shot_messages(
             selected_keys=list(selected_keys),
             property_specs=property_specs,
         )
-        demo_image = load_variant_image(
+        demo_image = load_variant_image_cached(
             sample_meta=demo,
             variant=variant,
             mask_background_mode=mask_background_mode,
+            image_cache=image_cache,
         )
         demo_payload = build_demo_response_payload(
             image_id=str(demo["image_id"]),
@@ -1079,6 +1149,7 @@ def build_per_property_few_shot_messages(
     property_specs: Dict[str, PropertySpec],
     variant: str,
     mask_background_mode: str,
+    image_cache: Optional[Dict[Tuple[str, str, str, str], Image.Image]] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Image.Image]]:
     messages: List[Dict[str, Any]] = []
     images: List[Image.Image] = []
@@ -1089,10 +1160,11 @@ def build_per_property_few_shot_messages(
             property_key=property_key,
             spec=spec,
         )
-        demo_image = load_variant_image(
+        demo_image = load_variant_image_cached(
             sample_meta=demo,
             variant=variant,
             mask_background_mode=mask_background_mode,
+            image_cache=image_cache,
         )
         demo_payload = build_demo_response_payload(
             image_id=str(demo["image_id"]),
@@ -1346,10 +1418,83 @@ def infer_hf_chat_batch(runtime: VLMRuntime, image: Image.Image, prompts: Sequen
     return runtime.processor.batch_decode(generated, skip_special_tokens=True)
 
 
+def infer_hf_chat_messages_batch(
+    runtime: VLMRuntime,
+    messages_batch: Sequence[Sequence[Dict[str, Any]]],
+    images_batch: Sequence[Sequence[Image.Image]],
+) -> List[str]:
+    if not messages_batch:
+        return []
+    if len(messages_batch) == 1:
+        return [infer_hf_chat_messages(runtime, messages_batch[0], images_batch[0])]
+
+    texts: List[str] = []
+    image_inputs: List[Any] = []
+    for messages, images in zip(messages_batch, images_batch):
+        if hasattr(runtime.processor, "apply_chat_template"):
+            try:
+                text = runtime.processor.apply_chat_template(
+                    list(messages), tokenize=False, add_generation_prompt=True
+                )
+            except TypeError:
+                text = runtime.processor.apply_chat_template(
+                    list(messages), add_generation_prompt=True
+                )
+        else:
+            text = ""
+            for message in reversed(messages):
+                if message.get("role") != "user":
+                    continue
+                for chunk in message.get("content", []):
+                    if isinstance(chunk, dict) and chunk.get("type") == "text":
+                        text = str(chunk.get("text") or "")
+                        break
+                if text:
+                    break
+        texts.append(text if isinstance(text, str) else "")
+        image_inputs.append(images[0] if len(images) == 1 else list(images))
+
+    try:
+        inputs = runtime.processor(
+            text=texts,
+            images=image_inputs,
+            return_tensors="pt",
+            padding=True,
+            truncation=False,
+        )
+    except Exception:
+        return [
+            infer_hf_chat_messages(runtime, messages, images)
+            for messages, images in zip(messages_batch, images_batch)
+        ]
+
+    if hasattr(runtime.model, "device") and str(runtime.model.device) != "meta":
+        inputs = {
+            key: value.to(runtime.model.device) if hasattr(value, "to") else value
+            for key, value in inputs.items()
+        }
+
+    with torch.no_grad():
+        out = runtime.model.generate(**inputs, **runtime.gen_kwargs)
+
+    if "attention_mask" in inputs:
+        input_lens = inputs["attention_mask"].sum(dim=1).tolist()
+    else:
+        input_lens = [inputs["input_ids"].shape[1]] * len(texts)
+
+    generated = []
+    for i, input_len in enumerate(input_lens):
+        gen = out[i, int(input_len) :].detach().cpu()
+        generated.append(gen)
+
+    return runtime.processor.batch_decode(generated, skip_special_tokens=True)
+
+
 BACKEND_LOADERS = {"hf_chat": load_hf_chat_runtime}
 BACKEND_INFER = {"hf_chat": infer_hf_chat}
 BACKEND_INFER_BATCH = {"hf_chat": infer_hf_chat_batch}
 BACKEND_INFER_MESSAGES = {"hf_chat": infer_hf_chat_messages}
+BACKEND_INFER_MESSAGES_BATCH = {"hf_chat": infer_hf_chat_messages_batch}
 
 
 def load_runtime(model_key: str, model_registry: Dict[str, Dict[str, Any]]) -> VLMRuntime:
@@ -1387,6 +1532,20 @@ def infer_runtime_messages(
     if image is None:
         raise ValueError("images must not be empty")
     return infer_runtime(runtime, image, last_prompt)
+
+
+def infer_runtime_messages_batch(
+    runtime: VLMRuntime,
+    messages_batch: Sequence[Sequence[Dict[str, Any]]],
+    images_batch: Sequence[Sequence[Image.Image]],
+) -> List[str]:
+    fn = BACKEND_INFER_MESSAGES_BATCH.get(runtime.backend)
+    if fn is not None:
+        return fn(runtime, messages_batch, images_batch)
+    return [
+        infer_runtime_messages(runtime, messages, images)
+        for messages, images in zip(messages_batch, images_batch)
+    ]
 
 
 def infer_runtime_batch(runtime: VLMRuntime, image: Image.Image, prompts: Sequence[str]) -> List[str]:
@@ -1475,6 +1634,30 @@ def load_variant_image(sample_meta: Dict[str, Any], variant: str, mask_backgroun
     raise ValueError(f"Unknown variant: {variant}")
 
 
+def load_variant_image_cached(
+    sample_meta: Dict[str, Any],
+    variant: str,
+    mask_background_mode: str,
+    image_cache: Optional[Dict[Tuple[str, str, str, str], Image.Image]] = None,
+) -> Image.Image:
+    if image_cache is None:
+        return load_variant_image(sample_meta, variant, mask_background_mode)
+
+    cache_key = (
+        str(sample_meta.get("path") or ""),
+        str(sample_meta.get("mask_path") or ""),
+        variant,
+        mask_background_mode,
+    )
+    cached = image_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    image = load_variant_image(sample_meta, variant, mask_background_mode)
+    image_cache[cache_key] = image
+    return image
+
+
 def _column_prefix(property_key: str) -> str:
     return property_key.replace(".", "__")
 
@@ -1489,17 +1672,21 @@ def evaluate_one(
     property_batch_size: int,
     include_only_gt_known: bool,
     few_shot_k: int,
+    few_shot_selection_mode: str,
+    fixed_few_shot_candidates: Optional[Sequence[Dict[str, Any]]],
     max_properties_per_sample: Optional[int],
     mask_background_mode: str,
+    image_cache: Optional[Dict[Tuple[str, str, str, str], Image.Image]],
     save_raw_output: bool,
     json_success_threshold: float,
     image_id_success_threshold: Optional[float],
 ) -> Dict[str, Any]:
     image_id = str(sample_meta["image_id"])
-    image = load_variant_image(
+    image = load_variant_image_cached(
         sample_meta=sample_meta,
         variant=variant,
         mask_background_mode=mask_background_mode,
+        image_cache=image_cache,
     )
 
     gt_props = sample_meta["gt_properties"]
@@ -1535,6 +1722,8 @@ def evaluate_one(
                 property_specs=property_specs,
                 few_shot_k=few_shot_k,
                 selected_keys=selected_keys,
+                selection_mode=few_shot_selection_mode,
+                fixed_candidates=fixed_few_shot_candidates,
             )
             few_shot_demo_ids = [str(x["image_id"]) for x in demos]
             messages, images = build_joint_few_shot_messages(
@@ -1546,6 +1735,7 @@ def evaluate_one(
                 selected_keys=selected_keys,
                 variant=variant,
                 mask_background_mode=mask_background_mode,
+                image_cache=image_cache,
             )
             raw = infer_runtime_messages(runtime, messages, images)
         else:
@@ -1571,49 +1761,78 @@ def evaluate_one(
         raw_map: Dict[str, str] = {}
 
         if few_shot_k > 0:
-            for key in selected_keys:
-                demos = select_few_shot_examples(
+            shared_demos: Optional[List[Dict[str, Any]]] = None
+            if few_shot_selection_mode == "fixed":
+                shared_demos = select_few_shot_examples(
                     current_image_id=image_id,
                     samples=few_shot_pool,
                     property_specs=property_specs,
                     few_shot_k=few_shot_k,
-                    selected_keys=[key],
-                    property_key=key,
+                    selected_keys=selected_keys,
+                    selection_mode=few_shot_selection_mode,
+                    fixed_candidates=fixed_few_shot_candidates,
                 )
-                if not few_shot_demo_ids:
-                    few_shot_demo_ids = [str(x["image_id"]) for x in demos]
-                messages, images = build_per_property_few_shot_messages(
-                    image_id=image_id,
-                    image=image,
-                    property_key=key,
-                    spec=property_specs[key],
-                    demos=demos,
-                    property_specs=property_specs,
-                    variant=variant,
-                    mask_background_mode=mask_background_mode,
-                )
-                raw = infer_runtime_messages(runtime, messages, images)
-                raw_map[key] = raw
+                few_shot_demo_ids = [str(x["image_id"]) for x in shared_demos]
 
-                parsed_json, parse_error = parse_model_output(raw)
-                if parse_error:
-                    parse_errors.append(f"{key}: {parse_error}")
-                else:
-                    valid_json_count += 1
+            for key_chunk in chunked(selected_keys, property_batch_size):
+                messages_chunk: List[List[Dict[str, Any]]] = []
+                images_chunk: List[List[Image.Image]] = []
+                chunk_keys: List[str] = []
 
-                if isinstance(parsed_json, dict):
-                    if str(parsed_json.get("image_id")).strip() == image_id:
-                        image_id_match_count += 1
-                    if primary_object_pred is None and parsed_json.get("primary_object") is not None:
-                        primary_object_pred = parsed_json.get("primary_object")
-                    if notes_pred is None and parsed_json.get("notes") is not None:
-                        notes_pred = parsed_json.get("notes")
+                for key in key_chunk:
+                    demos = shared_demos
+                    if demos is None:
+                        demos = select_few_shot_examples(
+                            current_image_id=image_id,
+                            samples=few_shot_pool,
+                            property_specs=property_specs,
+                            few_shot_k=few_shot_k,
+                            selected_keys=[key],
+                            selection_mode=few_shot_selection_mode,
+                            fixed_candidates=fixed_few_shot_candidates,
+                            property_key=key,
+                        )
+                        if not few_shot_demo_ids:
+                            few_shot_demo_ids = [str(x["image_id"]) for x in demos]
 
-                    pred_val = normalize_value(
-                        property_specs[key],
-                        _fetch_pred_raw_value(parsed_json, key),
+                    messages, images = build_per_property_few_shot_messages(
+                        image_id=image_id,
+                        image=image,
+                        property_key=key,
+                        spec=property_specs[key],
+                        demos=demos,
+                        property_specs=property_specs,
+                        variant=variant,
+                        mask_background_mode=mask_background_mode,
+                        image_cache=image_cache,
                     )
-                    pred_props[key] = pred_val
+                    messages_chunk.append(messages)
+                    images_chunk.append(images)
+                    chunk_keys.append(key)
+
+                raw_chunk = infer_runtime_messages_batch(runtime, messages_chunk, images_chunk)
+                for key, raw in zip(chunk_keys, raw_chunk):
+                    raw_map[key] = raw
+
+                    parsed_json, parse_error = parse_model_output(raw)
+                    if parse_error:
+                        parse_errors.append(f"{key}: {parse_error}")
+                    else:
+                        valid_json_count += 1
+
+                    if isinstance(parsed_json, dict):
+                        if str(parsed_json.get("image_id")).strip() == image_id:
+                            image_id_match_count += 1
+                        if primary_object_pred is None and parsed_json.get("primary_object") is not None:
+                            primary_object_pred = parsed_json.get("primary_object")
+                        if notes_pred is None and parsed_json.get("notes") is not None:
+                            notes_pred = parsed_json.get("notes")
+
+                        pred_val = normalize_value(
+                            property_specs[key],
+                            _fetch_pred_raw_value(parsed_json, key),
+                        )
+                        pred_props[key] = pred_val
         else:
             for key_chunk in chunked(selected_keys, property_batch_size):
                 prompt_chunk = [
@@ -1706,6 +1925,7 @@ def evaluate_one(
         "requested_property_keys": "|".join(selected_keys),
         "prompt_mode": prompt_mode,
         "few_shot_k": int(few_shot_k),
+        "few_shot_selection_mode": few_shot_selection_mode,
         "few_shot_demo_ids": "|".join(few_shot_demo_ids),
     }
 
@@ -1743,6 +1963,7 @@ def run_validation(
     property_batch_size: int = 8,
     include_only_gt_known: bool = True,
     few_shot_k: int = 0,
+    few_shot_selection_mode: str = "fixed",
     max_properties_per_sample: Optional[int] = None,
     mask_background_mode: str = "black",
     save_raw_output: bool = True,
@@ -1751,6 +1972,12 @@ def run_validation(
 ) -> pd.DataFrame:
     runtime = None
     rows = []
+    image_cache: Dict[Tuple[str, str, str, str], Image.Image] = {}
+    fixed_few_shot_candidates = (
+        build_fixed_few_shot_candidates(samples, property_specs)
+        if few_shot_k > 0 and few_shot_selection_mode == "fixed"
+        else None
+    )
 
     try:
         runtime = load_runtime(model_key, model_registry)
@@ -1766,8 +1993,11 @@ def run_validation(
                     property_batch_size=property_batch_size,
                     include_only_gt_known=include_only_gt_known,
                     few_shot_k=few_shot_k,
+                    few_shot_selection_mode=few_shot_selection_mode,
+                    fixed_few_shot_candidates=fixed_few_shot_candidates,
                     max_properties_per_sample=max_properties_per_sample,
                     mask_background_mode=mask_background_mode,
+                    image_cache=image_cache,
                     save_raw_output=save_raw_output,
                     json_success_threshold=json_success_threshold,
                     image_id_success_threshold=image_id_success_threshold,
@@ -1801,6 +2031,7 @@ def run_validation(
                     "requested_property_keys": "",
                     "prompt_mode": prompt_mode,
                     "few_shot_k": int(few_shot_k),
+                    "few_shot_selection_mode": few_shot_selection_mode,
                     "few_shot_demo_ids": "",
                 }
 
@@ -1979,6 +2210,11 @@ def save_report(
         "variant": variant,
         "prompt_mode": str(df["prompt_mode"].iloc[0]) if "prompt_mode" in df.columns and len(df) else "unknown",
         "few_shot_k": int(df["few_shot_k"].iloc[0]) if "few_shot_k" in df.columns and len(df) else 0,
+        "few_shot_selection_mode": (
+            str(df["few_shot_selection_mode"].iloc[0])
+            if "few_shot_selection_mode" in df.columns and len(df)
+            else "fixed"
+        ),
         "num_samples": int(len(df)),
         "valid_json_count": int(df["has_valid_json"].sum()),
         "valid_json_pct": round(100.0 * float(df["has_valid_json"].mean()), 2) if len(df) else 0.0,
@@ -2082,6 +2318,7 @@ def run_many_models(
     property_batch_size: int = 8,
     include_only_gt_known: bool = True,
     few_shot_k: int = 0,
+    few_shot_selection_mode: str = "fixed",
     max_properties_per_sample: Optional[int] = None,
     mask_background_mode: str = "black",
     save_raw_output: bool = True,
@@ -2106,6 +2343,7 @@ def run_many_models(
                 property_batch_size=property_batch_size,
                 include_only_gt_known=include_only_gt_known,
                 few_shot_k=few_shot_k,
+                few_shot_selection_mode=few_shot_selection_mode,
                 max_properties_per_sample=max_properties_per_sample,
                 mask_background_mode=mask_background_mode,
                 save_raw_output=save_raw_output,
@@ -2129,6 +2367,7 @@ def run_many_models(
                         "prompt_mode": prompt_mode,
                         "property_batch_size": property_batch_size,
                         "few_shot_k": few_shot_k,
+                        "few_shot_selection_mode": few_shot_selection_mode,
                         "property": r["property"],
                         "group": r["group"],
                         "value_type": r["value_type"],

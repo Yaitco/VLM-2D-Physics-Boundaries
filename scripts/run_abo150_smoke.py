@@ -48,7 +48,7 @@ def parse_args() -> argparse.Namespace:
         "--protocol-name",
         type=str,
         default="expanded_ontology",
-        choices=["expanded_ontology", "pdf_compact"],
+        choices=["expanded_ontology", "full_expanded", "narrow_core", "pdf_compact"],
         help="Evaluation protocol to exercise during the smoke test.",
     )
     parser.add_argument(
@@ -61,6 +61,13 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=0,
         help="Number of demo examples to include in few-shot mode.",
+    )
+    parser.add_argument(
+        "--few-shot-selection-mode",
+        type=str,
+        default="fixed",
+        choices=["fixed", "dynamic"],
+        help="How demo examples are selected for few-shot runs.",
     )
     return parser.parse_args()
 
@@ -166,7 +173,7 @@ def main() -> None:
 
     property_specs = val.load_protocol_property_specs(
         protocol_name=args.protocol_name,
-        schema_path=schema_path if args.protocol_name == "expanded_ontology" else None,
+        schema_path=schema_path if args.protocol_name in {"expanded_ontology", "full_expanded", "narrow_core"} else None,
     )
     samples = val.load_abo150_samples(
         annotations_path=annotations_path,
@@ -199,6 +206,7 @@ def main() -> None:
         property_batch_size=4,
         include_only_gt_known=args.include_only_gt_known,
         few_shot_k=args.few_shot_k,
+        few_shot_selection_mode=args.few_shot_selection_mode,
         max_properties_per_sample=12 if args.prompt_mode == "joint" else None,
         mask_background_mode="black",
         save_raw_output=True,
