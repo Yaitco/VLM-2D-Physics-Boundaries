@@ -9,6 +9,7 @@ import os
 import random
 import re
 from dataclasses import dataclass
+from dataclasses import field
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
@@ -54,6 +55,7 @@ MODEL_REGISTRY = {
         "use_4bit": True,
         "max_new_tokens": 128,
         "do_sample": False,
+        "max_prompt_batch_size": 2,
     },
 }
 
@@ -80,6 +82,8 @@ class VLMRuntime:
     processor: Any
     model: Any
     gen_kwargs: Dict[str, Any]
+    prompt_batch_cap: Optional[int] = None
+    stats: Dict[str, int] = field(default_factory=dict)
 
 
 def chunked(seq: Sequence[Any], size: int) -> Iterator[Sequence[Any]]:
@@ -99,6 +103,10 @@ def get_secret_value(secret_name: str) -> Optional[str]:
     except Exception:
         pass
     return os.getenv(secret_name.upper()) or os.getenv(secret_name)
+
+
+def _bump_runtime_stat(runtime: VLMRuntime, key: str, amount: int = 1) -> None:
+    runtime.stats[key] = int(runtime.stats.get(key, 0)) + int(amount)
 
 
 def init_comet_experiment(
@@ -970,7 +978,16 @@ def load_hf_chat_runtime(name: str, cfg: Dict[str, Any]) -> VLMRuntime:
                         pass
 
     model.eval()
-    return VLMRuntime(name=name, backend="hf_chat", model_id=model_id, processor=processor, model=model, gen_kwargs=gen_kwargs)
+    return VLMRuntime(
+        name=name,
+        backend="hf_chat",
+        model_id=model_id,
+        processor=processor,
+        model=model,
+        gen_kwargs=gen_kwargs,
+        prompt_batch_cap=cfg.get("max_prompt_batch_size"),
+        stats={},
+    )
 
 
 def _simple_user_message(prompt: str) -> List[Dict[str, Any]]:
@@ -1015,6 +1032,7 @@ def _apply_chat_template_text(runtime: VLMRuntime, messages: Sequence[Dict[str, 
 def infer_hf_chat_messages(runtime: VLMRuntime, messages: Sequence[Dict[str, Any]], images: Sequence[Image.Image]) -> str:
     if not images:
         raise ValueError("images must not be empty")
+    _bump_runtime_stat(runtime, "single_message_calls")
 
     image_input: Any = images[0] if len(images) == 1 else list(images)
     text = _apply_chat_template_text(runtime, messages)
@@ -1045,9 +1063,13 @@ def infer_hf_chat_messages_batch(
 ) -> List[str]:
     if not messages_batch:
         return []
+    _bump_runtime_stat(runtime, "messages_batch_calls")
+    _bump_runtime_stat(runtime, "messages_batch_items", len(messages_batch))
     if len(messages_batch) == 1:
+        _bump_runtime_stat(runtime, "messages_batch_degenerate_to_single")
         return [infer_hf_chat_messages(runtime, messages_batch[0], images_batch[0])]
-    if "llava" in runtime.model_id.lower():
+    if "llava" in runtime.model_id.lower() and any(len(images) > 1 or len(messages) > 1 for messages, images in zip(messages_batch, images_batch)):
+        _bump_runtime_stat(runtime, "llava_multi_image_sequential_fallback")
         return [infer_hf_chat_messages(runtime, messages, images) for messages, images in zip(messages_batch, images_batch)]
 
     texts: List[str] = []
@@ -1055,6 +1077,7 @@ def infer_hf_chat_messages_batch(
     for messages, images in zip(messages_batch, images_batch):
         text = _apply_chat_template_text(runtime, messages)
         if not text.strip():
+            _bump_runtime_stat(runtime, "messages_batch_blank_template_fallback")
             return [infer_hf_chat_messages(runtime, m, i) for m, i in zip(messages_batch, images_batch)]
         texts.append(text)
         image_inputs.append(images[0] if len(images) == 1 else list(images))
@@ -1062,6 +1085,7 @@ def infer_hf_chat_messages_batch(
     try:
         inputs = runtime.processor(text=texts, images=image_inputs, return_tensors="pt", padding=True, truncation=False)
     except Exception:
+        _bump_runtime_stat(runtime, "messages_batch_processor_exception_fallback")
         return [infer_hf_chat_messages(runtime, m, i) for m, i in zip(messages_batch, images_batch)]
 
     if hasattr(runtime.model, "device") and str(runtime.model.device) != "meta":
@@ -1083,16 +1107,61 @@ def infer_hf_chat_messages_batch(
             generated.append(out[i].detach().cpu())
     decoded = runtime.processor.batch_decode(generated, skip_special_tokens=True)
     if any((not isinstance(item, str)) or (not item.strip()) for item in decoded):
+        _bump_runtime_stat(runtime, "messages_batch_empty_decode_fallback")
         return [infer_hf_chat_messages(runtime, m, i) for m, i in zip(messages_batch, images_batch)]
+    _bump_runtime_stat(runtime, "messages_batch_success")
     return decoded
 
 
 def infer_hf_chat_batch(runtime: VLMRuntime, image: Image.Image, prompts: Sequence[str]) -> List[str]:
-    return infer_hf_chat_messages_batch(
-        runtime,
-        [_simple_user_message(prompt) for prompt in prompts],
-        [[image] for _ in prompts],
-    )
+    if not prompts:
+        return []
+    _bump_runtime_stat(runtime, "simple_batch_calls")
+    _bump_runtime_stat(runtime, "simple_batch_items", len(prompts))
+    if len(prompts) == 1:
+        _bump_runtime_stat(runtime, "simple_batch_degenerate_to_single")
+        return [infer_hf_chat(runtime, image, prompts[0])]
+
+    texts = [_apply_chat_template_text(runtime, _simple_user_message(prompt)) for prompt in prompts]
+    if any(not text.strip() for text in texts):
+        _bump_runtime_stat(runtime, "simple_batch_blank_template_fallback")
+        return [infer_hf_chat(runtime, image, prompt) for prompt in prompts]
+
+    try:
+        inputs = runtime.processor(
+            text=texts,
+            images=[image for _ in prompts],
+            return_tensors="pt",
+            padding=True,
+            truncation=False,
+        )
+    except Exception:
+        _bump_runtime_stat(runtime, "simple_batch_processor_exception_fallback")
+        return [infer_hf_chat(runtime, image, prompt) for prompt in prompts]
+
+    if hasattr(runtime.model, "device") and str(runtime.model.device) != "meta":
+        inputs = {k: v.to(runtime.model.device) if hasattr(v, "to") else v for k, v in inputs.items()}
+
+    with torch.no_grad():
+        out = runtime.model.generate(**inputs, **runtime.gen_kwargs)
+
+    if "attention_mask" in inputs:
+        input_lens = inputs["attention_mask"].sum(dim=1).tolist()
+    else:
+        input_lens = [inputs["input_ids"].shape[1]] * len(texts)
+
+    generated = []
+    for i, input_len in enumerate(input_lens):
+        if out.shape[1] > int(input_len):
+            generated.append(out[i, int(input_len):].detach().cpu())
+        else:
+            generated.append(out[i].detach().cpu())
+    decoded = runtime.processor.batch_decode(generated, skip_special_tokens=True)
+    if any((not isinstance(item, str)) or (not item.strip()) for item in decoded):
+        _bump_runtime_stat(runtime, "simple_batch_empty_decode_fallback")
+        return [infer_hf_chat(runtime, image, prompt) for prompt in prompts]
+    _bump_runtime_stat(runtime, "simple_batch_success")
+    return decoded
 
 
 BACKEND_LOADERS = {"hf_chat": load_hf_chat_runtime}
@@ -1314,7 +1383,12 @@ def evaluate_one(
         )
         few_shot_demo_ids = [str(x["image_id"]) for x in shared_demos]
 
-    for key_chunk in chunked(selected_keys, property_batch_size):
+    effective_batch_size = int(property_batch_size)
+    if runtime.prompt_batch_cap is not None:
+        effective_batch_size = min(effective_batch_size, int(runtime.prompt_batch_cap))
+    effective_batch_size = max(1, effective_batch_size)
+
+    for key_chunk in chunked(selected_keys, effective_batch_size):
         if few_shot_k > 0:
             messages_batch: List[List[Dict[str, Any]]] = []
             images_batch: List[List[Image.Image]] = []
@@ -1397,6 +1471,7 @@ def evaluate_one(
         "expected_response_count": expected_response_count,
         "requested_property_keys": "|".join(selected_keys),
         "property_batch_size": int(property_batch_size),
+        "effective_property_batch_size": int(effective_batch_size),
         "few_shot_k": int(few_shot_k),
         "few_shot_selection_mode": few_shot_selection_mode,
         "few_shot_demo_ids": "|".join(few_shot_demo_ids),
@@ -1485,6 +1560,7 @@ def run_validation(
                     "expected_response_count": 0,
                     "requested_property_keys": "",
                     "property_batch_size": int(property_batch_size),
+                    "effective_property_batch_size": int(min(property_batch_size, runtime.prompt_batch_cap) if runtime and runtime.prompt_batch_cap is not None else property_batch_size),
                     "few_shot_k": int(few_shot_k),
                     "few_shot_selection_mode": few_shot_selection_mode,
                     "few_shot_demo_ids": "",
@@ -1503,9 +1579,14 @@ def run_validation(
                 if save_raw_output:
                     row["raw_output"] = None
             rows.append(row)
+        if runtime is not None:
+            print(f"Runtime stats for {model_key} [{variant}]: {json.dumps(runtime.stats, ensure_ascii=False, sort_keys=True)}")
     finally:
         unload_runtime(runtime)
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    if runtime is not None:
+        df.attrs["runtime_stats"] = dict(runtime.stats)
+    return df
 
 
 def build_property_metrics(df: pd.DataFrame, property_specs: Dict[str, PropertySpec]) -> pd.DataFrame:
@@ -1638,6 +1719,7 @@ def save_report(
         "model_id": model_registry[model_key]["model_id"],
         "variant": variant,
         "property_batch_size": int(df["property_batch_size"].iloc[0]) if "property_batch_size" in df.columns and len(df) else None,
+        "effective_property_batch_size": int(df["effective_property_batch_size"].iloc[0]) if "effective_property_batch_size" in df.columns and len(df) else None,
         "few_shot_k": int(df["few_shot_k"].iloc[0]) if "few_shot_k" in df.columns and len(df) else 0,
         "few_shot_selection_mode": str(df["few_shot_selection_mode"].iloc[0]) if "few_shot_selection_mode" in df.columns and len(df) else "fixed",
         "num_samples": int(len(df)),
@@ -1654,6 +1736,9 @@ def save_report(
         "mean_macro_f1_pct": round(float(property_metrics["macro_f1_pct"].dropna().mean()), 2) if property_metrics["macro_f1_pct"].notna().any() else None,
         "mean_selective_accuracy_pct": round(float(property_metrics["selective_accuracy_pct"].dropna().mean()), 2) if property_metrics["selective_accuracy_pct"].notna().any() else None,
     }
+    runtime_stats = df.attrs.get("runtime_stats")
+    if runtime_stats:
+        summary["runtime_stats"] = runtime_stats
     if {"valid_json_count", "expected_response_count"}.issubset(df.columns) and len(df):
         total_expected = float(df["expected_response_count"].sum())
         total_valid = float(df["valid_json_count"].sum())
