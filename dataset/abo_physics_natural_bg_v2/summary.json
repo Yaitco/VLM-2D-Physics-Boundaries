@@ -1,0 +1,122 @@
+{
+  "output_dir": "dataset/abo_physics_natural_bg_v2",
+  "listing_shards": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "max_samples": 240,
+  "selection_pool_multiplier": 10,
+  "min_known_properties": 4,
+  "max_per_product_type": 12,
+  "exclude_product_types": [
+    "CELLULAR_PHONE_CASE",
+    "PORTABLE_ELECTRONIC_DEVICE_COVER"
+  ],
+  "seed": 42,
+  "records_stats": {
+    "records_total": 36928,
+    "records_with_ids": 36772,
+    "records_with_image_rel": 36772,
+    "records_with_local_image": 36772,
+    "records_with_min_known": 14122,
+    "records_excluded_by_product_type": 8271
+  },
+  "num_candidates": 5851,
+  "num_candidates_dedup": 5122,
+  "num_selected_before_images": 2400,
+  "num_written": 220,
+  "image_stats": {
+    "downloaded": 2400
+  },
+  "context_filter": {
+    "enabled": true,
+    "min_context_score": 0.16,
+    "max_border_white_ratio": 0.995,
+    "max_border_dark_ratio": 0.995,
+    "max_border_dominant_bin_ratio": 0.88,
+    "min_background_area_ratio": 0.02,
+    "max_background_white_ratio": 0.985,
+    "max_background_dark_ratio": 0.985,
+    "max_background_dominant_bin_ratio": 0.92
+  },
+  "context_stats": {
+    "filtered_by_context": 2136,
+    "kept_by_context": 264
+  },
+  "context_score_avg": 0.16549411836573175,
+  "context_score_min": 0.10090551773520684,
+  "context_score_max": 0.6773544533063909,
+  "mask_config": {
+    "generate_masks": true,
+    "mask_backend": "rembg",
+    "min_mask_area_ratio": 0.01,
+    "max_mask_area_ratio": 0.95
+  },
+  "mask_stats": {
+    "generated_rembg": 264,
+    "mask_area_out_of_range": 44
+  },
+  "pruned_files": {
+    "images_removed": 2180,
+    "masks_removed": 44
+  },
+  "property_distributions": {
+    "material": {
+      "fabric": 98,
+      "plastic": 27,
+      "paper": 7,
+      "stone": 32,
+      "metal": 9,
+      "mixed": 1,
+      "glass": 2,
+      "wood": 43,
+      "rubber": 1
+    },
+    "rigidity": {
+      "soft": 98,
+      "rigid": 113,
+      "flexible": 8,
+      "mixed": 1
+    },
+    "transparency": {
+      "opaque": 217,
+      "transparent": 2,
+      "translucent": 1
+    },
+    "surface": {
+      "mixed": 45,
+      "fuzzy": 79,
+      "smooth": 22,
+      "rough": 74
+    },
+    "fragility": {
+      "durable": 210,
+      "fragile": 9,
+      "unknown": 1
+    }
+  },
+  "top_product_types": {
+    "RUG": 72,
+    "HOME_BED_AND_BATH": 29,
+    "WALL_ART": 25,
+    "HOME_FURNITURE_AND_DECOR": 19,
+    "HOME": 13,
+    "TABLE": 12,
+    "BED": 7,
+    "CHAIR": 5,
+    "SOFA": 5,
+    "CABINET": 5,
+    "FURNITURE": 3,
+    "HOME_LIGHTING_AND_LAMPS": 3,
+    "GROCERY": 3,
+    "STICKER_DECAL": 2,
+    "TOOLS": 2,
+    "FURNITURE_COVER": 2,
+    "FLAT_SHEET": 2,
+    "VEHICLE_SEAT_COVER": 1,
+    "WINDOW_SHADE": 1,
+    "CLEANING_AGENT": 1
+  }
+}
