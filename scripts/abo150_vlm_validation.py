@@ -977,18 +977,47 @@ def _simple_user_message(prompt: str) -> List[Dict[str, Any]]:
     return [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": prompt}]}]
 
 
+def _messages_to_fallback_text(messages: Sequence[Dict[str, Any]]) -> str:
+    lines: List[str] = []
+    for message in messages:
+        role = str(message.get("role") or "user").upper()
+        content = message.get("content")
+        parts: List[str] = []
+        if isinstance(content, str):
+            if content.strip():
+                parts.append(content.strip())
+        elif isinstance(content, list):
+            for chunk in content:
+                if isinstance(chunk, dict) and chunk.get("type") == "text":
+                    text = str(chunk.get("text") or "").strip()
+                    if text:
+                        parts.append(text)
+        if parts:
+            lines.append(f"{role}: " + "\n".join(parts))
+    return "\n\n".join(lines).strip()
+
+
+def _apply_chat_template_text(runtime: VLMRuntime, messages: Sequence[Dict[str, Any]]) -> str:
+    if hasattr(runtime.processor, "apply_chat_template"):
+        try:
+            text = runtime.processor.apply_chat_template(list(messages), tokenize=False, add_generation_prompt=True)
+            if isinstance(text, str) and text.strip():
+                return text
+        except TypeError:
+            text = runtime.processor.apply_chat_template(list(messages), add_generation_prompt=True)
+            if isinstance(text, str) and text.strip():
+                return text
+        except Exception:
+            pass
+    return _messages_to_fallback_text(messages)
+
+
 def infer_hf_chat_messages(runtime: VLMRuntime, messages: Sequence[Dict[str, Any]], images: Sequence[Image.Image]) -> str:
     if not images:
         raise ValueError("images must not be empty")
 
     image_input: Any = images[0] if len(images) == 1 else list(images)
-    if hasattr(runtime.processor, "apply_chat_template"):
-        try:
-            text = runtime.processor.apply_chat_template(list(messages), tokenize=False, add_generation_prompt=True)
-        except TypeError:
-            text = runtime.processor.apply_chat_template(list(messages), add_generation_prompt=True)
-    else:
-        text = ""
+    text = _apply_chat_template_text(runtime, messages)
 
     inputs = runtime.processor(text=text, images=image_input, return_tensors="pt", truncation=False)
     if hasattr(runtime.model, "device") and str(runtime.model.device) != "meta":
@@ -998,7 +1027,10 @@ def infer_hf_chat_messages(runtime: VLMRuntime, messages: Sequence[Dict[str, Any
         out = runtime.model.generate(**inputs, **runtime.gen_kwargs)
 
     input_len = inputs["input_ids"].shape[1]
-    gen_tokens = out[:, input_len:]
+    if out.shape[1] > input_len:
+        gen_tokens = out[:, input_len:]
+    else:
+        gen_tokens = out
     return runtime.processor.batch_decode(gen_tokens, skip_special_tokens=True)[0]
 
 
@@ -1015,18 +1047,16 @@ def infer_hf_chat_messages_batch(
         return []
     if len(messages_batch) == 1:
         return [infer_hf_chat_messages(runtime, messages_batch[0], images_batch[0])]
+    if "llava" in runtime.model_id.lower():
+        return [infer_hf_chat_messages(runtime, messages, images) for messages, images in zip(messages_batch, images_batch)]
 
     texts: List[str] = []
     image_inputs: List[Any] = []
     for messages, images in zip(messages_batch, images_batch):
-        try:
-            text = runtime.processor.apply_chat_template(list(messages), tokenize=False, add_generation_prompt=True)
-        except Exception:
-            try:
-                text = runtime.processor.apply_chat_template(list(messages), add_generation_prompt=True)
-            except Exception:
-                text = ""
-        texts.append(text if isinstance(text, str) else "")
+        text = _apply_chat_template_text(runtime, messages)
+        if not text.strip():
+            return [infer_hf_chat_messages(runtime, m, i) for m, i in zip(messages_batch, images_batch)]
+        texts.append(text)
         image_inputs.append(images[0] if len(images) == 1 else list(images))
 
     try:
@@ -1045,8 +1075,16 @@ def infer_hf_chat_messages_batch(
     else:
         input_lens = [inputs["input_ids"].shape[1]] * len(texts)
 
-    generated = [out[i, int(input_len):].detach().cpu() for i, input_len in enumerate(input_lens)]
-    return runtime.processor.batch_decode(generated, skip_special_tokens=True)
+    generated = []
+    for i, input_len in enumerate(input_lens):
+        if out.shape[1] > int(input_len):
+            generated.append(out[i, int(input_len):].detach().cpu())
+        else:
+            generated.append(out[i].detach().cpu())
+    decoded = runtime.processor.batch_decode(generated, skip_special_tokens=True)
+    if any((not isinstance(item, str)) or (not item.strip()) for item in decoded):
+        return [infer_hf_chat_messages(runtime, m, i) for m, i in zip(messages_batch, images_batch)]
+    return decoded
 
 
 def infer_hf_chat_batch(runtime: VLMRuntime, image: Image.Image, prompts: Sequence[str]) -> List[str]:
