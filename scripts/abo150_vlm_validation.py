@@ -55,7 +55,7 @@ MODEL_REGISTRY = {
         "use_4bit": True,
         "max_new_tokens": 128,
         "do_sample": False,
-        "max_prompt_batch_size": 2,
+        "max_prompt_batch_size": 32,
     },
 }
 
