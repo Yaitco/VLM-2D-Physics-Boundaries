@@ -8,7 +8,18 @@
 - на каждое свойство отправляется отдельный короткий prompt;
 - ответы нормализуются и сводятся в единый `per_sample_predictions.csv`.
 
-Основной код находится в [scripts/abo150_vlm_validation.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/abo150_vlm_validation.py).
+Активная реализация теперь разнесена по `vlm_pipeline/*`.
+Файл [scripts/abo150_vlm_validation.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/abo150_vlm_validation.py)
+остался как тонкий фасад для ноутбуков и старых импортов.
+
+Основные модули:
+- [registry.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/vlm_pipeline/registry.py)
+- [specs.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/vlm_pipeline/specs.py)
+- [datasets.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/vlm_pipeline/datasets.py)
+- [runtime.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/vlm_pipeline/runtime.py)
+- [images.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/vlm_pipeline/images.py)
+- [evaluation.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/vlm_pipeline/evaluation.py)
+- [reporting.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/vlm_pipeline/reporting.py)
 
 ## Что поддерживается
 
@@ -62,10 +73,17 @@
 ## Общая схема
 
 ### 1. Загрузка схемы свойств
-Функция `load_protocol_property_specs(...)` возвращает словарь `property_specs` для выбранного протокола.
+`load_protocol_property_specs(...)` из
+[specs.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/vlm_pipeline/specs.py)
+возвращает словарь `property_specs` для выбранного протокола.
 
 ### 2. Загрузка датасета
-Функция `load_abo150_samples(...)`:
+Функции из [datasets.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/vlm_pipeline/datasets.py):
+- `load_abo150_samples(...)`
+- `load_meta_subset_samples(...)`
+- `load_samples_for_dataset(...)`
+
+`load_abo150_samples(...)`:
 - читает `selected_150_annotations.jsonl`;
 - резолвит `panel_path`;
 - при наличии подтягивает `mask_path`;
@@ -186,7 +204,7 @@
 - `selective_accuracy_pct`
 
 ### Если есть сомнения в compact mapping
-Смотреть mapping-функции в [scripts/abo150_vlm_validation.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/abo150_vlm_validation.py):
+Смотреть mapping-функции в [datasets.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/vlm_pipeline/datasets.py):
 - `_map_pdf_material`
 - `_map_pdf_reflectance`
 - `_map_pdf_surface_roughness`
@@ -200,7 +218,8 @@
 - `_map_pdf_slipperiness_hint`
 
 ## Связанные файлы
-- [scripts/abo150_vlm_validation.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/abo150_vlm_validation.py)
-- [ABO150_Validation_Colab.ipynb](/home/alexander/Projects/VLM-2D-Physics-Boundaries/ABO150_Validation_Colab.ipynb)
-- [scripts/run_abo150_smoke.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/run_abo150_smoke.py)
-- [docs/colab_runbook.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/docs/colab_runbook.md)
+- [abo150_vlm_validation.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/abo150_vlm_validation.py)
+- [vlm_pipeline](/home/alexander/Projects/VLM-2D-Physics-Boundaries/vlm_pipeline)
+- [Unified_VLM_Validation_Colab.ipynb](/home/alexander/Projects/VLM-2D-Physics-Boundaries/notebooks/Unified_VLM_Validation_Colab.ipynb)
+- [run_abo150_smoke.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/run_abo150_smoke.py)
+- [colab_runbook.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/docs/colab_runbook.md)

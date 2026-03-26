@@ -3,19 +3,23 @@
 ## Что это
 Короткая инструкция по запуску текущего упрощённого pipeline в Google Colab.
 
-Основной ноутбук:
-[ABO150_Validation_Colab.ipynb](/home/alexander/Projects/VLM-2D-Physics-Boundaries/ABO150_Validation_Colab.ipynb)
+Рекомендуемый ноутбук:
+[Unified_VLM_Validation_Colab.ipynb](/home/alexander/Projects/VLM-2D-Physics-Boundaries/notebooks/Unified_VLM_Validation_Colab.ipynb)
+
+Старые специализированные ноутбуки перенесены в:
+[archive_review/notebooks_legacy](/home/alexander/Projects/VLM-2D-Physics-Boundaries/archive_review/notebooks_legacy)
 
 ## Перед запуском
 
 ### 1. Colab Secrets
-Если нужен приватный репозиторий и Comet, в `google.colab.userdata` должны быть:
-- `git_coursework`
+Для текущего публичного репозитория GitHub-секрет больше не нужен.
+
+Если хочешь логирование в Comet, можно добавить в Colab Secrets:
 - `comet_api_key`
 - `comet_workspace`
 - `comet_project_name`
 
-Минимально для запуска приватного repo нужен `git_coursework`.
+Без этих ключей ноутбук тоже запустится, просто Comet будет отключён.
 
 ### 2. Runtime
 Рекомендуется GPU runtime.
@@ -29,6 +33,19 @@
 
 ## Основные настройки в ноутбуке
 
+### Датасет
+Для natural background subset:
+```python
+DATASET_NAME = "abo_physics_natural_bg_v2"
+PROTOCOL_NAME = "natural_bg_v2"
+```
+
+Для ABO150:
+```python
+DATASET_NAME = "abo_150_expanded"
+PROTOCOL_NAME = "narrow_core"
+```
+
 ### Протокол
 ```python
 PROTOCOL_NAME = "narrow_core"
@@ -38,6 +55,7 @@ PROTOCOL_NAME = "narrow_core"
 - `narrow_core`
 - `full_expanded`
 - `pdf_compact`
+- `natural_bg_v2`
 
 Рекомендуемый старт:
 - `narrow_core`
@@ -178,6 +196,5 @@ RUN_MULTI_MODEL = False
 - [scripts/run_abo150_smoke.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/run_abo150_smoke.py)
 
 ## Связанные документы
-- [docs/validation_pipeline.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/docs/validation_pipeline.md)
-- [day1_requirements.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/day1_requirements.md)
-- [day2_report.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/day2_report.md)
+- [validation_pipeline.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/docs/validation_pipeline.md)
+- [archive_review/project_notes](/home/alexander/Projects/VLM-2D-Physics-Boundaries/archive_review/project_notes)
