@@ -1,0 +1,22 @@
+{
+  "dataset_dir": "F:\\AlexProjects\\VLM-2D-Physics-Boundaries\\dataset\\abo_physics_natural_bg_v2",
+  "meta_path": "F:\\AlexProjects\\VLM-2D-Physics-Boundaries\\dataset\\abo_physics_natural_bg_v2\\meta.json",
+  "dataset_name": "abo_physics_natural_bg_v2",
+  "model_name": "grounding-dino-base+sam_vit_b",
+  "update_method": "main_object",
+  "masks_dir_name": "masks",
+  "preview_dir_name": "masks_preview",
+  "write_previews": true,
+  "counters": {
+    "num_items": 220,
+    "updated": 159,
+    "skipped_missing_meta": 0,
+    "skipped_selection_failed": 0,
+    "skipped_empty_mask": 61,
+    "image_failures": 0
+  },
+  "selected_counts": {
+    "main_object": 159
+  },
+  "mean_written_mask_area_ratio": 0.353247
+}

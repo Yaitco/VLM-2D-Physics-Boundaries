@@ -1,0 +1,27 @@
+{
+  "dataset_dir": "F:\\AlexProjects\\VLM-2D-Physics-Boundaries\\dataset\\abo_physics_natural_bg_v2",
+  "meta_path": "F:\\AlexProjects\\VLM-2D-Physics-Boundaries\\dataset\\abo_physics_natural_bg_v2\\meta.json",
+  "sam_model_id": "facebook/sam-vit-base",
+  "device": "cuda",
+  "input_mask_field": "mask_path",
+  "input_source_field": "mask_source",
+  "output_mask_field": "mask_path",
+  "output_source_field": "mask_source",
+  "output_dir_name": "masks",
+  "bbox_margin_ratio": 0.08,
+  "min_seed_area_ratio": 0.003,
+  "max_samples": null,
+  "counters": {
+    "num_items": 220,
+    "written": 210,
+    "skipped_existing": 10,
+    "skipped_missing_seed_mask": 0,
+    "skipped_missing_image": 0,
+    "skipped_small_seed_mask": 0,
+    "failures": 0
+  },
+  "mean_seed_area_ratio": 0.292365,
+  "mean_sam_area_ratio": 0.360411,
+  "mean_seed_overlap_iou": 0.755968,
+  "mean_predicted_iou": 0.925297
+}

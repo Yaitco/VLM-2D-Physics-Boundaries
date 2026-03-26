@@ -1,0 +1,2 @@
+main_object_win_count,best_class_win_count,tie_count,main_object_mean_iou,best_class_mean_iou,main_object_mean_dice,best_class_mean_dice
+65,98,57,0.27144435695899843,0.3319564060598013,0.3102375758994669,0.3735857151094207
