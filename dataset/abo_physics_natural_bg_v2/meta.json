@@ -52,7 +52,7 @@
     "sam_overlap_with_seed_iou": 0.982872,
     "sam_mask_area_ratio": 0.109124,
     "sam_status": "written",
-    "sam_preview_path": "abo_physics_natural_bg_v2\\masks_preview\\13\\13b61d5c.jpg",
+    "sam_preview_path": "abo_physics_natural_bg_v2/masks_preview/13/13b61d5c.jpg",
     "seg_seed_mask_path": "abo_physics_natural_bg_v2\\masks\\13\\13b61d5c.png",
     "seg_seed_mask_source": "sam:facebook/sam-vit-base",
     "seg_prompt_mode": "main_object",
@@ -120,7 +120,7 @@
     "sam_overlap_with_seed_iou": 0.598232,
     "sam_mask_area_ratio": 0.842701,
     "sam_status": "written",
-    "sam_preview_path": "abo_physics_natural_bg_v2\\masks_preview\\85\\8593e7dc.jpg",
+    "sam_preview_path": "abo_physics_natural_bg_v2/masks_preview/85/8593e7dc.jpg",
     "seg_seed_mask_path": "abo_physics_natural_bg_v2\\masks\\85\\8593e7dc.png",
     "seg_seed_mask_source": "sam:facebook/sam-vit-base",
     "seg_prompt_mode": "main_object",
@@ -188,7 +188,7 @@
     "sam_overlap_with_seed_iou": 0.674641,
     "sam_mask_area_ratio": 0.183123,
     "sam_status": "written",
-    "sam_preview_path": "abo_physics_natural_bg_v2\\masks_preview\\d0\\d09968ca.jpg",
+    "sam_preview_path": "abo_physics_natural_bg_v2/masks_preview/d0/d09968ca.jpg",
     "seg_seed_mask_path": "abo_physics_natural_bg_v2\\masks\\d0\\d09968ca.png",
     "seg_seed_mask_source": "sam:facebook/sam-vit-base",
     "seg_prompt_mode": "main_object",
@@ -256,7 +256,7 @@
     "sam_overlap_with_seed_iou": 0.969524,
     "sam_mask_area_ratio": 0.108734,
     "sam_status": "written",
-    "sam_preview_path": "abo_physics_natural_bg_v2\\masks_preview\\d5\\d50c75a0.jpg",
+    "sam_preview_path": "abo_physics_natural_bg_v2/masks_preview/d5/d50c75a0.jpg",
     "seg_seed_mask_path": "abo_physics_natural_bg_v2\\masks\\d5\\d50c75a0.png",
     "seg_seed_mask_source": "sam:facebook/sam-vit-base",
     "seg_prompt_mode": "main_object",
@@ -308,7 +308,7 @@
       "background_color_entropy": 0.5818145213448531,
       "context_score": 0.5034791330890216
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\66\\66505074.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/66/66505074.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/66/66505074.png",
     "sam_seed_mask_source": "rembg",
@@ -324,7 +324,7 @@
     "sam_overlap_with_seed_iou": 0.605272,
     "sam_mask_area_ratio": 0.214264,
     "sam_status": "written",
-    "sam_preview_path": "abo_physics_natural_bg_v2\\masks_preview\\66\\66505074.jpg",
+    "sam_preview_path": "abo_physics_natural_bg_v2/masks_preview/66/66505074.jpg",
     "seg_status": "empty_prediction",
     "seg_error": "Selected method 'main_object' returned an empty mask",
     "seg_prompt_mode": "main_object",
@@ -383,7 +383,7 @@
     "sam_overlap_with_seed_iou": 0.837806,
     "sam_mask_area_ratio": 0.41069,
     "sam_status": "written",
-    "sam_preview_path": "abo_physics_natural_bg_v2\\masks_preview\\a3\\a354be65.jpg",
+    "sam_preview_path": "abo_physics_natural_bg_v2/masks_preview/a3/a354be65.jpg",
     "seg_seed_mask_path": "abo_physics_natural_bg_v2\\masks\\a3\\a354be65.png",
     "seg_seed_mask_source": "sam:facebook/sam-vit-base",
     "seg_prompt_mode": "main_object",
@@ -451,7 +451,7 @@
     "sam_overlap_with_seed_iou": 0.014294,
     "sam_mask_area_ratio": 0.774361,
     "sam_status": "written",
-    "sam_preview_path": "abo_physics_natural_bg_v2\\masks_preview\\0c\\0cbfca58.jpg",
+    "sam_preview_path": "abo_physics_natural_bg_v2/masks_preview/0c/0cbfca58.jpg",
     "seg_seed_mask_path": "abo_physics_natural_bg_v2\\masks\\0c\\0cbfca58.png",
     "seg_seed_mask_source": "sam:facebook/sam-vit-base",
     "seg_prompt_mode": "main_object",
@@ -519,7 +519,7 @@
     "sam_overlap_with_seed_iou": 0.942433,
     "sam_mask_area_ratio": 0.031387,
     "sam_status": "written",
-    "sam_preview_path": "abo_physics_natural_bg_v2\\masks_preview\\45\\457c5eb9.jpg",
+    "sam_preview_path": "abo_physics_natural_bg_v2/masks_preview/45/457c5eb9.jpg",
     "seg_seed_mask_path": "abo_physics_natural_bg_v2\\masks\\45\\457c5eb9.png",
     "seg_seed_mask_source": "sam:facebook/sam-vit-base",
     "seg_prompt_mode": "main_object",
@@ -571,7 +571,7 @@
       "background_color_entropy": 0.6082966830690907,
       "context_score": 0.5804283247603494
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\c7\\c7a55c2e.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/c7/c7a55c2e.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/c7/c7a55c2e.png",
     "sam_seed_mask_source": "rembg",
@@ -587,7 +587,7 @@
     "sam_overlap_with_seed_iou": 0.868554,
     "sam_mask_area_ratio": 0.507874,
     "sam_status": "written",
-    "sam_preview_path": "abo_physics_natural_bg_v2\\masks_preview\\c7\\c7a55c2e.jpg",
+    "sam_preview_path": "abo_physics_natural_bg_v2/masks_preview/c7/c7a55c2e.jpg",
     "seg_status": "empty_prediction",
     "seg_error": "Selected method 'main_object' returned an empty mask",
     "seg_prompt_mode": "main_object",
@@ -630,7 +630,7 @@
       "background_color_entropy": 0.6603377518734893,
       "context_score": 0.5477674451630347
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\23\\237122ba.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/23/237122ba.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/23/237122ba.png",
     "sam_seed_mask_source": "rembg",
@@ -646,7 +646,7 @@
     "sam_overlap_with_seed_iou": 0.901488,
     "sam_mask_area_ratio": 0.097672,
     "sam_status": "written",
-    "sam_preview_path": "abo_physics_natural_bg_v2\\masks_preview\\23\\237122ba.jpg",
+    "sam_preview_path": "abo_physics_natural_bg_v2/masks_preview/23/237122ba.jpg",
     "seg_status": "empty_prediction",
     "seg_error": "Selected method 'main_object' returned an empty mask",
     "seg_prompt_mode": "main_object",
@@ -756,7 +756,7 @@
       "background_color_entropy": 0.6062661896669803,
       "context_score": 0.5218250456604725
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\ab\\ab784771.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/ab/ab784771.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/ab/ab784771.png",
     "sam_seed_mask_source": "rembg",
@@ -948,7 +948,7 @@
       "background_color_entropy": 0.39081246592625607,
       "context_score": 0.4281864015285093
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\fb\\fbeafab7.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/fb/fbeafab7.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/fb/fbeafab7.png",
     "sam_seed_mask_source": "rembg",
@@ -1006,7 +1006,7 @@
       "background_color_entropy": 0.35165543062675425,
       "context_score": 0.41342753166869534
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\a3\\a355c9b0.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/a3/a355c9b0.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/a3/a355c9b0.png",
     "sam_seed_mask_source": "rembg",
@@ -1064,7 +1064,7 @@
       "background_color_entropy": 0.3517265239185635,
       "context_score": 0.3659546438060176
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\bc\\bcb7af0e.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/bc/bcb7af0e.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/bc/bcb7af0e.png",
     "sam_seed_mask_source": "rembg",
@@ -1189,7 +1189,7 @@
       "background_color_entropy": 0.36818181409290546,
       "context_score": 0.4106880652058805
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\67\\670a016a.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/67/670a016a.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/67/670a016a.png",
     "sam_seed_mask_source": "rembg",
@@ -1247,7 +1247,7 @@
       "background_color_entropy": 0.5774616359873259,
       "context_score": 0.523187354439202
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\98\\981c0c34.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/98/981c0c34.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/98/981c0c34.png",
     "sam_seed_mask_source": "rembg",
@@ -1372,7 +1372,7 @@
       "background_color_entropy": 0.5359499201549262,
       "context_score": 0.561552354497686
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\07\\07cd3c4b.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/07/07cd3c4b.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/07/07cd3c4b.png",
     "sam_seed_mask_source": "rembg",
@@ -1430,7 +1430,7 @@
       "background_color_entropy": 0.22706073738761945,
       "context_score": 0.3032048386336135
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\45\\4514df74.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/45/4514df74.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/45/4514df74.png",
     "sam_seed_mask_source": "rembg",
@@ -1689,7 +1689,7 @@
       "background_color_entropy": 0.33492664196459127,
       "context_score": 0.37909587354564656
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\04\\048bd865.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/04/048bd865.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/04/048bd865.png",
     "sam_seed_mask_source": "rembg",
@@ -2216,7 +2216,7 @@
       "background_color_entropy": 0.7213755506408603,
       "context_score": 0.650951686533703
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\89\\89d183a2.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/89/89d183a2.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/89/89d183a2.png",
     "sam_seed_mask_source": "rembg",
@@ -2274,7 +2274,7 @@
       "background_color_entropy": 0.5368105246471213,
       "context_score": 0.4830279792003732
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\31\\31a48655.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/31/31a48655.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/31/31a48655.png",
     "sam_seed_mask_source": "rembg",
@@ -2332,7 +2332,7 @@
       "background_color_entropy": 0.5104450778620295,
       "context_score": 0.47625788066105884
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\c8\\c8e096a3.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/c8/c8e096a3.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/c8/c8e096a3.png",
     "sam_seed_mask_source": "rembg",
@@ -2390,7 +2390,7 @@
       "background_color_entropy": 0.2430337769511117,
       "context_score": 0.33192436250874363
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\4a\\4a9e8983.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/4a/4a9e8983.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/4a/4a9e8983.png",
     "sam_seed_mask_source": "rembg",
@@ -2448,7 +2448,7 @@
       "background_color_entropy": 0.22706073738761945,
       "context_score": 0.3032048386336135
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\38\\385b4be9.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/38/385b4be9.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/38/385b4be9.png",
     "sam_seed_mask_source": "rembg",
@@ -2506,7 +2506,7 @@
       "background_color_entropy": 0.21917654167248446,
       "context_score": 0.26681047753080966
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\45\\4595acf0.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/45/4595acf0.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/45/4595acf0.png",
     "sam_seed_mask_source": "rembg",
@@ -2765,7 +2765,7 @@
       "background_color_entropy": 0.5165944848289648,
       "context_score": 0.47608877908669966
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\e9\\e9c4028d.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/e9/e9c4028d.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/e9/e9c4028d.png",
     "sam_seed_mask_source": "rembg",
@@ -3426,7 +3426,7 @@
       "background_color_entropy": 0.63264180278805,
       "context_score": 0.5273847337598472
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\7f\\7fed406b.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/7f/7fed406b.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/7f/7fed406b.png",
     "sam_seed_mask_source": "rembg",
@@ -3752,7 +3752,7 @@
       "background_color_entropy": 0.6067024665304551,
       "context_score": 0.5317820776940789
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\88\\88b19c9c.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/88/88b19c9c.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/88/88b19c9c.png",
     "sam_seed_mask_source": "rembg",
@@ -3944,7 +3944,7 @@
       "background_color_entropy": 0.5069147697311831,
       "context_score": 0.4862689512317195
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\09\\097bb159.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/09/097bb159.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/09/097bb159.png",
     "sam_seed_mask_source": "rembg",
@@ -4002,7 +4002,7 @@
       "background_color_entropy": 0.4653530423133142,
       "context_score": 0.41777649964085317
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\60\\600ead9b.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/60/600ead9b.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/60/600ead9b.png",
     "sam_seed_mask_source": "rembg",
@@ -4328,7 +4328,7 @@
       "background_color_entropy": 0.4876770598800863,
       "context_score": 0.43278761182527
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\a2\\a2c10d4f.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/a2/a2c10d4f.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/a2/a2c10d4f.png",
     "sam_seed_mask_source": "rembg",
@@ -4386,7 +4386,7 @@
       "background_color_entropy": 0.4392323794436542,
       "context_score": 0.4729365071356576
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\e5\\e5722224.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/e5/e5722224.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/e5/e5722224.png",
     "sam_seed_mask_source": "rembg",
@@ -4578,7 +4578,7 @@
       "background_color_entropy": 0.37156503024728066,
       "context_score": 0.4693596666348116
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\86\\864071d3.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/86/864071d3.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/86/864071d3.png",
     "sam_seed_mask_source": "rembg",
@@ -4636,7 +4636,7 @@
       "background_color_entropy": 0.5976733249759234,
       "context_score": 0.5354701887279849
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\22\\22daf266.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/22/22daf266.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/22/22daf266.png",
     "sam_seed_mask_source": "rembg",
@@ -4694,7 +4694,7 @@
       "background_color_entropy": 0.35242343338831167,
       "context_score": 0.32428225463263516
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\f9\\f943d2bb.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/f9/f943d2bb.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/f9/f943d2bb.png",
     "sam_seed_mask_source": "rembg",
@@ -4819,7 +4819,7 @@
       "background_color_entropy": 0.31903769642000074,
       "context_score": 0.344114944694019
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\53\\532dbe40.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/53/532dbe40.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/53/532dbe40.png",
     "sam_seed_mask_source": "rembg",
@@ -5011,7 +5011,7 @@
       "background_color_entropy": 0.49210969859399195,
       "context_score": 0.4655725437328849
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\0c\\0c789496.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/0c/0c789496.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/0c/0c789496.png",
     "sam_seed_mask_source": "rembg",
@@ -5404,7 +5404,7 @@
       "background_color_entropy": 0.848325834920896,
       "context_score": 0.662388641654873
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\bc\\bc80fc9f.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/bc/bc80fc9f.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/bc/bc80fc9f.png",
     "sam_seed_mask_source": "rembg",
@@ -5529,7 +5529,7 @@
       "background_color_entropy": 0.5948416449298809,
       "context_score": 0.5810919986539945
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\21\\2156a065.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/21/2156a065.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/21/2156a065.png",
     "sam_seed_mask_source": "rembg",
@@ -5587,7 +5587,7 @@
       "background_color_entropy": 0.581663107454599,
       "context_score": 0.50492263558226
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\f6\\f6ac4355.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/f6/f6ac4355.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/f6/f6ac4355.png",
     "sam_seed_mask_source": "rembg",
@@ -6181,7 +6181,7 @@
       "background_color_entropy": 0.24172644588393366,
       "context_score": 0.3492808172583273
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\82\\825d0f45.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/82/825d0f45.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/82/825d0f45.png",
     "sam_seed_mask_source": "rembg",
@@ -6708,7 +6708,7 @@
       "background_color_entropy": 0.6234873281547273,
       "context_score": 0.6012108052286944
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\63\\63e02681.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/63/63e02681.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/63/63e02681.png",
     "sam_seed_mask_source": "rembg",
@@ -6766,7 +6766,7 @@
       "background_color_entropy": 0.523876022473073,
       "context_score": 0.48363503289986504
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\8a\\8ac9fb4f.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/8a/8ac9fb4f.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/8a/8ac9fb4f.png",
     "sam_seed_mask_source": "rembg",
@@ -6958,7 +6958,7 @@
       "background_color_entropy": 0.5789560434564731,
       "context_score": 0.5794336628439674
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\c1\\c12cd74a.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/c1/c12cd74a.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/c1/c12cd74a.png",
     "sam_seed_mask_source": "rembg",
@@ -7016,7 +7016,7 @@
       "background_color_entropy": 0.672481227651181,
       "context_score": 0.6149404711023568
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\85\\851a6e6d.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/85/851a6e6d.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/85/851a6e6d.png",
     "sam_seed_mask_source": "rembg",
@@ -7744,7 +7744,7 @@
       "background_color_entropy": 0.6771535147918676,
       "context_score": 0.6296194040662446
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\51\\51b9a3f7.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/51/51b9a3f7.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/51/51b9a3f7.png",
     "sam_seed_mask_source": "rembg",
@@ -8204,7 +8204,7 @@
       "background_color_entropy": 0.2785895610771946,
       "context_score": 0.3967970900294543
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\91\\911bac33.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/91/911bac33.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/91/911bac33.png",
     "sam_seed_mask_source": "rembg",
@@ -8865,7 +8865,7 @@
       "background_color_entropy": 0.5062691133084881,
       "context_score": 0.4357206162869931
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\31\\31347f65.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/31/31347f65.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/31/31347f65.png",
     "sam_seed_mask_source": "rembg",
@@ -8923,7 +8923,7 @@
       "background_color_entropy": 0.5190392691173831,
       "context_score": 0.4753855415073279
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\9f\\9f6cf147.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/9f/9f6cf147.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/9f/9f6cf147.png",
     "sam_seed_mask_source": "rembg",
@@ -9316,7 +9316,7 @@
       "background_color_entropy": 0.6299911486560106,
       "context_score": 0.5577538219722075
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\e0\\e0cfa227.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/e0/e0cfa227.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/e0/e0cfa227.png",
     "sam_seed_mask_source": "rembg",
@@ -9709,7 +9709,7 @@
       "background_color_entropy": 0.6509990908650712,
       "context_score": 0.5924018006291741
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\52\\526208f0.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/52/526208f0.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/52/526208f0.png",
     "sam_seed_mask_source": "rembg",
@@ -9767,7 +9767,7 @@
       "background_color_entropy": 0.5898100831294112,
       "context_score": 0.5958523860049096
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\b5\\b5514d9c.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/b5/b5514d9c.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/b5/b5514d9c.png",
     "sam_seed_mask_source": "rembg",
@@ -10629,7 +10629,7 @@
       "background_color_entropy": 0.6637342026314609,
       "context_score": 0.6244892510783215
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\54\\54e4b681.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/54/54e4b681.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/54/54e4b681.png",
     "sam_seed_mask_source": "rembg",
@@ -11491,7 +11491,7 @@
       "background_color_entropy": 0.622600995015343,
       "context_score": 0.6114805444492094
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\bd\\bd3c9e15.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/bd/bd3c9e15.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/bd/bd3c9e15.png",
     "sam_seed_mask_source": "rembg",
@@ -11549,7 +11549,7 @@
       "background_color_entropy": 0.5457177075909,
       "context_score": 0.4761938888285711
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\c2\\c2764f4b.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/c2/c2764f4b.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/c2/c2764f4b.png",
     "sam_seed_mask_source": "rembg",
@@ -11808,7 +11808,7 @@
       "background_color_entropy": 0.5984090324011383,
       "context_score": 0.5023923647355865
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\87\\87d53cae.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/87/87d53cae.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/87/87d53cae.png",
     "sam_seed_mask_source": "rembg",
@@ -11933,7 +11933,7 @@
       "background_color_entropy": 0.6484945710485992,
       "context_score": 0.606445277215484
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\39\\39a52159.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/39/39a52159.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/39/39a52159.png",
     "sam_seed_mask_source": "rembg",
@@ -12259,7 +12259,7 @@
       "background_color_entropy": 0.4530781225614196,
       "context_score": 0.4807884913068158
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\ef\\effd7df5.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/ef/effd7df5.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/ef/effd7df5.png",
     "sam_seed_mask_source": "rembg",
@@ -12317,7 +12317,7 @@
       "background_color_entropy": 0.6857563821684488,
       "context_score": 0.6199415024923168
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\2b\\2b1a39bf.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/2b/2b1a39bf.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/2b/2b1a39bf.png",
     "sam_seed_mask_source": "rembg",
@@ -12643,7 +12643,7 @@
       "background_color_entropy": 0.2699360000965789,
       "context_score": 0.35715430446765967
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\83\\8328b6ae.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/83/8328b6ae.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/83/8328b6ae.png",
     "sam_seed_mask_source": "rembg",
@@ -12701,7 +12701,7 @@
       "background_color_entropy": 0.4845770067155987,
       "context_score": 0.460944247746959
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\84\\84d46503.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/84/84d46503.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/84/84d46503.png",
     "sam_seed_mask_source": "rembg",
@@ -13027,7 +13027,7 @@
       "background_color_entropy": 0.7037367076427392,
       "context_score": 0.6250706976415987
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\b8\\b8ce6cbf.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/b8/b8ce6cbf.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/b8/b8ce6cbf.png",
     "sam_seed_mask_source": "rembg",
@@ -13085,7 +13085,7 @@
       "background_color_entropy": 0.6829786431254548,
       "context_score": 0.6120562472223507
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\d5\\d584c562.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/d5/d584c562.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/d5/d584c562.png",
     "sam_seed_mask_source": "rembg",
@@ -13210,7 +13210,7 @@
       "background_color_entropy": 0.7391131203461014,
       "context_score": 0.6619888472614934
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\7d\\7dce32c8.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/7d/7dce32c8.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/7d/7dce32c8.png",
     "sam_seed_mask_source": "rembg",
@@ -13536,7 +13536,7 @@
       "background_color_entropy": 0.3300045530675888,
       "context_score": 0.41874619679498554
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\f4\\f4094c37.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/f4/f4094c37.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/f4/f4094c37.png",
     "sam_seed_mask_source": "rembg",
@@ -13661,7 +13661,7 @@
       "background_color_entropy": 0.22729353795070353,
       "context_score": 0.3071672921705234
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\ab\\ab14547f.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/ab/ab14547f.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/ab/ab14547f.png",
     "sam_seed_mask_source": "rembg",
@@ -13786,7 +13786,7 @@
       "background_color_entropy": 0.42309248117865683,
       "context_score": 0.4045367972832721
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\52\\52f369b0.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/52/52f369b0.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/52/52f369b0.png",
     "sam_seed_mask_source": "rembg",
@@ -13911,7 +13911,7 @@
       "background_color_entropy": 0.7254359131913558,
       "context_score": 0.6597369846435069
     },
-    "mask_path": "abo_physics_natural_bg_v2\\masks\\0d\\0dc8bb97.png",
+    "mask_path": "abo_physics_natural_bg_v2/masks/0d/0dc8bb97.png",
     "mask_source": "sam:facebook/sam-vit-base",
     "sam_seed_mask_path": "abo_physics_natural_bg_v2/masks/0d/0dc8bb97.png",
     "sam_seed_mask_source": "rembg",
