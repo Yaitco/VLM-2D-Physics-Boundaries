@@ -1,0 +1,52 @@
+properties:
+  material:
+    type: categorical
+    enum:
+      - fabric
+      - wood
+      - stone
+      - plastic
+      - metal
+      - paper
+      - glass
+      - rubber
+      - mixed
+      - unknown
+    description: "Основной материал объекта в natural background subset v2."
+
+  rigidity:
+    type: categorical
+    enum:
+      - rigid
+      - soft
+      - flexible
+      - mixed
+      - unknown
+    description: "Грубая жёсткость объекта."
+
+  transparency:
+    type: categorical
+    enum:
+      - opaque
+      - translucent
+      - transparent
+      - unknown
+    description: "Степень прозрачности объекта."
+
+  surface:
+    type: categorical
+    enum:
+      - smooth
+      - rough
+      - fuzzy
+      - mixed
+      - unknown
+    description: "Характер поверхности объекта."
+
+  fragility:
+    type: categorical
+    enum:
+      - durable
+      - fragile
+      - unknown
+    description: "Ломкость объекта."

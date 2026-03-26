@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a physics-oriented ABO validation subset.
 
-Output format is compatible with CourseWork.ipynb:
+Output format is compatible with notebooks/CourseWork.ipynb:
 - dataset/abo_physics_val/meta.json
 - dataset/abo_physics_val/images/<xx>/<file>.jpg
 - dataset/abo_physics_val/masks/<xx>/<file>.png (optional)

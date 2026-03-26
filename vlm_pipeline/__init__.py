@@ -1,72 +1,62 @@
-"""Compatibility facade for the structured VLM validation pipeline.
-
-The actual implementation lives in the `vlm_pipeline` package.
-This module stays as a thin import layer so existing notebooks and scripts
-can keep importing from `scripts.abo150_vlm_validation`.
-"""
-
-from pathlib import Path
-import sys
-
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from vlm_pipeline import (
-    ABO_NATURAL_BG_V2_SCHEMA_PATH,
+from .comet import get_secret_value, init_comet_experiment
+from .datasets import (
+    extract_pdf_protocol_properties,
+    load_abo150_samples,
+    load_meta_subset_samples,
+    load_samples_for_dataset,
+)
+from .evaluation import (
+    build_demo_response_payload,
+    build_fixed_few_shot_candidates,
+    build_property_prompt,
+    evaluate_one,
+    get_available_variants,
+    run_many_models,
+    run_validation,
+    select_few_shot_examples,
+    select_property_keys_for_sample,
+)
+from .images import (
+    apply_mask_overlay_to_image,
+    apply_mask_to_image,
+    load_variant_image,
+    load_variant_image_cached,
+)
+from .parsing import (
+    find_first_json_object,
+    normalize_pred,
+    parse_model_output,
+    strip_code_fences,
+)
+from .registry import DatasetContext, MODEL_REGISTRY, ROOT_DIR, get_dataset_context
+from .reporting import build_property_metrics, log_report_to_comet, save_report
+from .runtime import (
     BACKEND_INFER,
     BACKEND_INFER_BATCH,
     BACKEND_INFER_MESSAGES,
     BACKEND_INFER_MESSAGES_BATCH,
     BACKEND_LOADERS,
-    DatasetContext,
-    MODEL_REGISTRY,
-    NARROW_CORE_KEYS_PATH,
-    PDF_COMPACT_SCHEMA_PATH,
-    PropertySpec,
-    ROOT_DIR,
     VLMRuntime,
-    apply_mask_overlay_to_image,
-    apply_mask_to_image,
-    build_demo_response_payload,
-    build_fixed_few_shot_candidates,
-    build_property_metrics,
-    build_property_prompt,
-    evaluate_one,
-    extract_pdf_protocol_properties,
-    find_first_json_object,
-    get_available_variants,
-    get_dataset_context,
-    get_secret_value,
     infer_runtime,
     infer_runtime_batch,
     infer_runtime_messages,
     infer_runtime_messages_batch,
-    init_comet_experiment,
+    load_runtime,
+    unload_runtime,
+)
+from .specs import (
+    ABO_NATURAL_BG_V2_SCHEMA_PATH,
+    NARROW_CORE_KEYS_PATH,
+    PDF_COMPACT_SCHEMA_PATH,
+    PropertySpec,
     is_known_value,
-    load_abo150_samples,
     load_compact_property_specs,
-    load_meta_subset_samples,
     load_property_specs,
     load_property_subset_specs,
     load_protocol_property_specs,
-    load_runtime,
-    load_samples_for_dataset,
-    load_variant_image,
-    load_variant_image_cached,
-    log_report_to_comet,
-    normalize_pred,
     normalize_value,
-    parse_model_output,
     resolve_protocol_schema_path,
-    run_many_models,
-    run_validation,
-    save_report,
-    select_few_shot_examples,
-    select_property_keys_for_sample,
     serialize_value,
-    strip_code_fences,
-    unload_runtime,
     values_equal,
 )
 
