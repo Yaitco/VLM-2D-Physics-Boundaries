@@ -287,3 +287,66 @@ outputs/exp1/
 - `src/models/sam_wrapper.py`
 
 Остальной пайплайн от этого не зависит.
+
+## Hint-режим по названиям объектов
+
+Можно включить дополнительный метод `hint`, который берёт текстовую подсказку из `meta.json` и прогоняет её через тот же pipeline `Grounding DINO -> SAM`.
+
+Поддерживаются поля:
+
+- `--hint_field primary_object`
+- `--hint_field product_type`
+- `--hint_field title`
+
+Если выбранное поле пустое, код автоматически пробует другие поддерживаемые поля как fallback. `title` тоже поддерживается, но обычно он шумнее из-за брендов, размеров и многоязычных описаний.
+
+### Обновление датасета без перезаписи базовой маски
+
+Если запустить `--dataset_update_method hint`, результат будет сохранён не в основные поля, а в отдельный hint-слой. Суффикс по умолчанию зависит от поля hint:
+
+- `primary_object` -> `*_hint`
+- `product_type` -> `*_hint_product_type`
+- `title` -> `*_hint_title`
+
+При желании суффикс можно переопределить вручную через `--dataset_field_suffix`.
+
+Типовые поля для title-режима будут такими:
+
+- `mask_path_hint_title`
+- `mask_source_hint_title`
+- `seg_seed_mask_path_hint_title`
+- `seg_seed_mask_source_hint_title`
+- `seg_prompt_mode_hint_title`
+- `seg_selected_method_hint_title`
+- `seg_query_text_hint_title`
+- `seg_box_xyxy_hint_title`
+- `seg_model_name_hint_title`
+- `seg_status_hint_title`
+- `seg_mask_area_ratio_hint_title`
+- `seg_dino_score_hint_title`
+- `seg_sam_score_hint_title`
+- `seg_inference_time_hint_title`
+- `seg_preview_path_hint_title`
+
+Файлы масок и preview при этом по умолчанию пишутся в:
+
+- `dataset/.../masks_hint_title/...`
+- `dataset/.../masks_preview_hint_title/...`
+
+Пример:
+
+```bash
+python -m src.run_experiment \
+  --images_dir dataset/abo_physics_natural_bg_v2/images \
+  --masks_dir dataset/abo_physics_natural_bg_v2/masks \
+  --output_dir outputs/abo_physics_natural_bg_v2_hint_title \
+  --device cuda \
+  --enable_hint_method \
+  --hint_field title \
+  --update_dataset \
+  --dataset_dir dataset/abo_physics_natural_bg_v2 \
+  --dataset_update_method hint \
+  --write_dataset_previews
+```
+
+

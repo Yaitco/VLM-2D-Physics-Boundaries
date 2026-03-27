@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import argparse
+import json
 import logging
 import math
 from pathlib import Path
@@ -22,8 +23,11 @@ pd: Any = None
 
 CLASS_PROMPTS = ["carpet", "rug", "area rug"]
 CLASS_METHODS = ["carpet", "rug", "area_rug"]
-ALL_METHODS = ["main_object", *CLASS_METHODS]
-DATASET_UPDATE_METHODS = ["main_object", "carpet", "rug", "area_rug", "best_class", "best_available"]
+BASE_METHODS = ["main_object", *CLASS_METHODS]
+DATASET_UPDATE_METHODS = ["main_object", "carpet", "rug", "area_rug", "best_class", "best_available", "hint"]
+HINT_FIELDS = ["primary_object", "product_type", "title"]
+HINT_METHOD = "hint"
+HINT_FIELD_SUFFIX = "_hint"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 MASK_EXTENSIONS = [".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"]
 RESULT_COLUMNS = [
@@ -81,14 +85,29 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--amg_pred_iou_thresh", type=float, default=0.88)
     parser.add_argument("--amg_stability_score_thresh", type=float, default=0.95)
     parser.add_argument("--amg_crop_n_layers", type=int, default=1)
-    parser.add_argument("--update_dataset", action="store_true", help="Write selected masks back into dataset masks/meta.json.")
+    parser.add_argument(
+        "--enable_hint_method",
+        action="store_true",
+        help="Run an extra Grounding DINO -> SAM pass using object-name hints from dataset meta.json.",
+    )
+    parser.add_argument(
+        "--hint_field",
+        choices=HINT_FIELDS,
+        default="primary_object",
+        help="Metadata field to use for the hint prompt. Falls back to the other supported field if missing.",
+    )
+    parser.add_argument(
+        "--update_dataset",
+        action="store_true",
+        help="Write selected masks back into dataset masks/meta.json.",
+    )
     parser.add_argument("--dataset_dir", type=Path, default=None, help="Dataset root containing meta.json, images/, masks/.")
     parser.add_argument("--dataset_meta_path", type=Path, default=None, help="Optional explicit meta.json path for dataset updates.")
     parser.add_argument(
         "--dataset_update_method",
         choices=DATASET_UPDATE_METHODS,
         default="main_object",
-        help="Which prediction to write back into dataset mask_path.",
+        help="Which prediction to write back into dataset metadata.",
     )
     parser.add_argument("--dataset_masks_dir_name", type=str, default="masks", help="Directory name inside dataset for written masks.")
     parser.add_argument(
@@ -96,6 +115,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="masks_preview",
         help="Directory name inside dataset for preview overlays.",
+    )
+    parser.add_argument(
+        "--dataset_field_suffix",
+        type=str,
+        default="",
+        help="Optional suffix for dataset fields and default output dirs, for example _hint_title.",
     )
     parser.add_argument("--dataset_save_every", type=int, default=10, help="Flush updated meta.json every N written items.")
     parser.add_argument("--write_dataset_previews", action="store_true", help="Write overlay previews into the dataset.")
@@ -122,6 +147,25 @@ def main() -> int:
     image_paths = collect_image_paths(args.images_dir)
     logger.info("Found %d images in %s", len(image_paths), args.images_dir)
 
+    hint_enabled = bool(args.enable_hint_method or args.dataset_update_method == HINT_METHOD)
+    active_methods = list(BASE_METHODS)
+    if hint_enabled:
+        active_methods.append(HINT_METHOD)
+
+    hint_meta_index: dict[str, dict[str, Any]] = {}
+    hint_dataset_name: str | None = None
+    if hint_enabled:
+        hint_meta_index, hint_dataset_name = load_hint_meta_index(
+            images_dir=args.images_dir,
+            dataset_dir=args.dataset_dir,
+            dataset_meta_path=args.dataset_meta_path,
+        )
+        logger.info(
+            "Hint mode enabled: field=%s, indexed_items=%d",
+            args.hint_field,
+            len({id(item): item for item in hint_meta_index.values()}),
+        )
+
     dino = GroundingDinoAdapter(
         model_id_or_path=args.grounding_model_id,
         device=device,
@@ -146,23 +190,37 @@ def main() -> int:
     dataset_updater: DatasetUpdater | None = None
     if args.update_dataset:
         dataset_dir = args.dataset_dir.resolve() if args.dataset_dir is not None else infer_dataset_dir(args.images_dir)
+        dataset_masks_dir_name = args.dataset_masks_dir_name
+        dataset_preview_dir_name = args.dataset_preview_dir_name
+        dataset_field_suffix = normalize_field_suffix(args.dataset_field_suffix)
+        if args.dataset_update_method == HINT_METHOD:
+            if not dataset_field_suffix:
+                dataset_field_suffix = default_hint_field_suffix(args.hint_field)
+            if dataset_masks_dir_name == "masks":
+                dataset_masks_dir_name = build_dataset_dir_name("masks", dataset_field_suffix)
+            if dataset_preview_dir_name == "masks_preview":
+                dataset_preview_dir_name = build_dataset_dir_name("masks_preview", dataset_field_suffix)
+
         dataset_updater = DatasetUpdater(
             dataset_dir=dataset_dir,
             images_dir=args.images_dir,
             meta_path=args.dataset_meta_path,
             model_name=build_model_name(args.grounding_model_id, args.sam_model_type),
             update_method=args.dataset_update_method,
-            masks_dir_name=args.dataset_masks_dir_name,
-            preview_dir_name=args.dataset_preview_dir_name,
+            masks_dir_name=dataset_masks_dir_name,
+            preview_dir_name=dataset_preview_dir_name,
             write_previews=args.write_dataset_previews,
             save_every=args.dataset_save_every,
+            field_suffix=dataset_field_suffix,
         )
         logger.info(
-            "Dataset update mode enabled: dataset=%s, method=%s",
+            "Dataset update mode enabled: dataset=%s, method=%s, suffix=%s, masks_dir=%s",
             dataset_dir,
             args.dataset_update_method,
+            dataset_field_suffix or "<none>",
+            dataset_masks_dir_name,
         )
-        if args.masks_dir is not None and args.masks_dir.resolve() == (dataset_dir / args.dataset_masks_dir_name).resolve():
+        if args.masks_dir is not None and args.masks_dir.resolve() == (dataset_dir / dataset_masks_dir_name).resolve():
             logger.info(
                 "masks_dir points to the dataset masks directory, so reported metrics compare new masks against the previous dataset masks."
             )
@@ -177,7 +235,7 @@ def main() -> int:
                 image = load_rgb_image(image_path)
             except Exception:
                 logger.exception("Failed to load image %s", image_path)
-                rows.extend(build_failure_rows(image_key))
+                rows.extend(build_failure_rows(image_key, active_methods))
                 if dataset_updater is not None:
                     dataset_updater.mark_image_failure(image_path, "image_load_failed")
                 continue
@@ -244,6 +302,66 @@ def main() -> int:
                     box_xyxy=None,
                 )
 
+            if hint_enabled:
+                hint_prompt = resolve_hint_prompt(
+                    image_path=image_path,
+                    images_dir=args.images_dir,
+                    dataset_name=hint_dataset_name,
+                    hint_meta_index=hint_meta_index,
+                    hint_field=args.hint_field,
+                )
+                if hint_prompt is None:
+                    logger.warning("No hint prompt found for %s", image_key)
+                    hint_mask = np.zeros((image.size[1], image.size[0]), dtype=bool)
+                    hint_dino_score = None
+                    hint_sam_score = None
+                    hint_inference_time = float("nan")
+                    hint_box = None
+                else:
+                    try:
+                        hint_prediction = carpet_pipeline.run_prompt(image, hint_prompt)
+                        hint_mask = postprocess_mask(
+                            hint_prediction.mask,
+                            min_component_area=args.min_component_area,
+                            closing_kernel_size=args.closing_kernel_size,
+                            closing_iterations=args.closing_iterations,
+                        )
+                        hint_dino_score = hint_prediction.dino_score
+                        hint_sam_score = hint_prediction.sam_score
+                        hint_inference_time = hint_prediction.inference_time
+                        hint_box = hint_prediction.box_xyxy
+                    except Exception:
+                        logger.exception("Hint pipeline failed for %s with prompt '%s'", image_path, hint_prompt)
+                        hint_mask = np.zeros((image.size[1], image.size[0]), dtype=bool)
+                        hint_dino_score = None
+                        hint_sam_score = None
+                        hint_inference_time = float("nan")
+                        hint_box = None
+
+                save_prediction_outputs(output_dir, image_path, args.images_dir, HINT_METHOD, image, hint_mask, args.overlay_alpha)
+                hint_metrics = build_metric_dict(hint_mask, gt_mask)
+                method_to_metrics[HINT_METHOD] = hint_metrics
+                method_to_overlay[HINT_METHOD] = render_mask_overlay(image, hint_mask, alpha=args.overlay_alpha)
+                rows.append(
+                    build_result_row(
+                        image_name=image_key,
+                        method=HINT_METHOD,
+                        mask=hint_mask,
+                        metrics=hint_metrics,
+                        dino_score=hint_dino_score,
+                        sam_score=hint_sam_score,
+                        inference_time=hint_inference_time,
+                    )
+                )
+                method_results[HINT_METHOD] = build_method_result(
+                    mask=hint_mask,
+                    query_text=hint_prompt,
+                    dino_score=hint_dino_score,
+                    sam_score=hint_sam_score,
+                    inference_time=hint_inference_time,
+                    box_xyxy=hint_box,
+                )
+
             for prompt in CLASS_PROMPTS:
                 method_name = slugify(prompt)
                 try:
@@ -304,7 +422,16 @@ def main() -> int:
                         box_xyxy=None,
                     )
 
-            save_image_collage(output_dir, image_path, args.images_dir, image, gt_mask, method_to_overlay, method_to_metrics)
+            save_image_collage(
+                output_dir,
+                image_path,
+                args.images_dir,
+                image,
+                gt_mask,
+                method_to_overlay,
+                method_to_metrics,
+                active_methods,
+            )
             if dataset_updater is not None:
                 dataset_updater.update_image(image_path, image, method_results)
 
@@ -336,8 +463,131 @@ def build_model_name(grounding_model_id: str, sam_model_type: str) -> str:
 def infer_dataset_dir(images_dir: Path) -> Path:
     resolved = images_dir.resolve()
     if resolved.name.lower() != "images":
-        raise ValueError("When --update_dataset is enabled without --dataset_dir, images_dir must point to <dataset>/images")
+        raise ValueError("When dataset metadata is needed without --dataset_dir, images_dir must point to <dataset>/images")
     return resolved.parent
+
+
+def normalize_field_suffix(value: str | None) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    text = text.replace("-", "_").replace(" ", "_")
+    if not text.startswith("_"):
+        text = f"_{text}"
+    return text
+
+
+def default_hint_field_suffix(hint_field: str) -> str:
+    if hint_field == "primary_object":
+        return HINT_FIELD_SUFFIX
+    return f"{HINT_FIELD_SUFFIX}_{hint_field}"
+
+
+def build_dataset_dir_name(base_name: str, field_suffix: str) -> str:
+    normalized_suffix = normalize_field_suffix(field_suffix)
+    if not normalized_suffix:
+        return base_name
+    return f"{base_name}{normalized_suffix}"
+
+
+def load_hint_meta_index(
+    images_dir: Path,
+    dataset_dir: Path | None,
+    dataset_meta_path: Path | None,
+) -> tuple[dict[str, dict[str, Any]], str]:
+    resolved_dataset_dir = dataset_dir.resolve() if dataset_dir is not None else infer_dataset_dir(images_dir)
+    meta_path = dataset_meta_path.resolve() if dataset_meta_path is not None else (resolved_dataset_dir / "meta.json")
+    if not meta_path.exists():
+        raise FileNotFoundError(f"Hint mode requires a dataset meta.json file: {meta_path}")
+
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    dataset_name = resolved_dataset_dir.name
+    prefix = f"{dataset_name}/images/"
+    index: dict[str, dict[str, Any]] = {}
+    for item in meta:
+        path_value = str(item.get("path") or "").strip()
+        if not path_value:
+            continue
+        normalized = normalize_meta_key(path_value)
+        index[normalized] = item
+        if normalized.startswith(prefix):
+            index[normalized[len(prefix) :]] = item
+    if not index:
+        raise ValueError(f"Hint mode could not build an index from {meta_path}")
+    return index, dataset_name
+
+
+def resolve_hint_prompt(
+    image_path: Path,
+    images_dir: Path,
+    dataset_name: str | None,
+    hint_meta_index: dict[str, dict[str, Any]],
+    hint_field: str,
+) -> str | None:
+    relative = image_path.resolve().relative_to(images_dir.resolve()).as_posix()
+    candidates = [normalize_meta_key(relative)]
+    if dataset_name:
+        candidates.append(normalize_meta_key(f"{dataset_name}/images/{relative}"))
+
+    for key in candidates:
+        item = hint_meta_index.get(key)
+        if item is None:
+            continue
+        prompt = build_hint_prompt(item, hint_field)
+        if prompt is not None:
+            return prompt
+    return None
+
+
+def build_hint_prompt(meta_item: dict[str, Any], hint_field: str) -> str | None:
+    if hint_field not in HINT_FIELDS:
+        raise ValueError(f"Unsupported hint field: {hint_field}")
+
+    abo_meta = meta_item.get("abo_meta") or {}
+    if hint_field == "primary_object":
+        raw_candidates = [
+            meta_item.get("primary_object"),
+            abo_meta.get("product_type"),
+            abo_meta.get("title"),
+        ]
+    elif hint_field == "product_type":
+        raw_candidates = [
+            abo_meta.get("product_type"),
+            meta_item.get("primary_object"),
+            abo_meta.get("title"),
+        ]
+    else:
+        raw_candidates = [
+            abo_meta.get("title"),
+            meta_item.get("primary_object"),
+            abo_meta.get("product_type"),
+        ]
+
+    seen: set[str] = set()
+    for raw_value in raw_candidates:
+        prompt = normalize_hint_prompt(raw_value)
+        if prompt is None or prompt in seen:
+            continue
+        seen.add(prompt)
+        return prompt
+    return None
+
+
+def normalize_hint_prompt(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    text = text.replace("_", " ").replace("-", " ")
+    text = " ".join(text.split())
+    return text or None
+
+
+def normalize_meta_key(value: str) -> str:
+    return value.replace("\\", "/").strip().lower()
 
 
 def build_method_result(
@@ -494,10 +744,10 @@ def build_result_row(
     }
 
 
-def build_failure_rows(image_name: str) -> list[dict[str, Any]]:
+def build_failure_rows(image_name: str, active_methods: list[str]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     empty = empty_metrics()
-    for method in ALL_METHODS:
+    for method in active_methods:
         rows.append(
             {
                 "image_name": image_name,
@@ -524,6 +774,7 @@ def save_image_collage(
     gt_mask: np.ndarray | None,
     method_to_overlay: dict[str, Image.Image],
     method_to_metrics: dict[str, dict[str, float]],
+    active_methods: list[str],
 ) -> None:
     relative = image_path.relative_to(images_dir)
     collage_path = (output_dir / "collages" / relative).with_suffix(".jpg")
@@ -545,7 +796,7 @@ def save_image_collage(
             )
         )
 
-    for method in ALL_METHODS:
+    for method in active_methods:
         overlay = method_to_overlay.get(method, image.copy())
         metrics = method_to_metrics.get(method, empty_metrics())
         panels.append(
@@ -691,3 +942,7 @@ def _safe_float(value: float | None) -> float:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+
+

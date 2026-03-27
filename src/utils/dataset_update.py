@@ -11,7 +11,7 @@ from src.utils.metrics import area_ratio
 from src.utils.visualization import render_mask_overlay
 
 CLASS_METHODS = ("carpet", "rug", "area_rug")
-UPDATE_METHODS = ("main_object", "carpet", "rug", "area_rug", "best_class", "best_available")
+UPDATE_METHODS = ("main_object", "carpet", "rug", "area_rug", "best_class", "best_available", "hint")
 
 
 class DatasetUpdater:
@@ -28,6 +28,8 @@ class DatasetUpdater:
         preview_dir_name: str = "masks_preview",
         write_previews: bool = False,
         save_every: int = 10,
+        field_suffix: str = "",
+        summary_name: str | None = None,
     ) -> None:
         if update_method not in UPDATE_METHODS:
             raise ValueError(f"Unsupported dataset update method: {update_method}")
@@ -42,6 +44,7 @@ class DatasetUpdater:
         self.write_previews = write_previews
         self.save_every = max(1, int(save_every))
         self.dataset_name = self.dataset_dir.name
+        self.field_suffix = field_suffix or ""
 
         if not self.meta_path.exists():
             raise FileNotFoundError(f"Dataset meta.json was not found: {self.meta_path}")
@@ -49,11 +52,13 @@ class DatasetUpdater:
         self.meta: list[dict[str, Any]] = json.loads(self.meta_path.read_text(encoding="utf-8"))
         self.index: dict[str, dict[str, Any]] = {}
         for item in self.meta:
+            self._normalize_path_fields_inplace(item)
             path_value = str(item.get("path") or "").strip()
             if path_value:
                 self.index[self._normalize_key(path_value)] = item
 
-        self.summary_path = self.dataset_dir / "grounded_sam_summary.json"
+        suffix_tag = self.field_suffix if self.field_suffix else ""
+        self.summary_path = self.dataset_dir / (summary_name or f"grounded_sam{suffix_tag}_summary.json")
         self.backup_path = self.dataset_dir / "meta.before_grounded_sam.json"
         if not self.backup_path.exists():
             self.backup_path.write_text(
@@ -87,8 +92,8 @@ class DatasetUpdater:
         selection = self._select_result(method_results)
         if selection is None:
             self.counters["skipped_selection_failed"] += 1
-            item["seg_status"] = "selection_failed"
-            item["seg_error"] = f"No valid result for dataset update method '{self.update_method}'"
+            item[self._field("seg_status")] = "selection_failed"
+            item[self._field("seg_error")] = f"No valid result for dataset update method '{self.update_method}'"
             self._flush_if_needed(force=False)
             return
 
@@ -96,10 +101,10 @@ class DatasetUpdater:
         mask = np.asarray(result.get("mask"), dtype=bool)
         if mask.size == 0 or not mask.any():
             self.counters["skipped_empty_mask"] += 1
-            item["seg_status"] = "empty_prediction"
-            item["seg_error"] = f"Selected method '{selected_method}' returned an empty mask"
-            item["seg_prompt_mode"] = selected_method
-            item["seg_query_text"] = str(result.get("query_text") or "")
+            item[self._field("seg_status")] = "empty_prediction"
+            item[self._field("seg_error")] = f"Selected method '{selected_method}' returned an empty mask"
+            item[self._field("seg_prompt_mode")] = selected_method
+            item[self._field("seg_query_text")] = str(result.get("query_text") or "")
             self._flush_if_needed(force=False)
             return
 
@@ -118,24 +123,25 @@ class DatasetUpdater:
 
         previous_mask_path = item.get("mask_path")
         previous_mask_source = item.get("mask_source")
-        item["seg_seed_mask_path"] = previous_mask_path
-        item["seg_seed_mask_source"] = previous_mask_source
-        item["mask_path"] = mask_rel
-        item["mask_source"] = self._build_mask_source(selected_method)
-        item["seg_prompt_mode"] = selected_method
-        item["seg_selected_method"] = selected_method
-        item["seg_query_text"] = str(result.get("query_text") or "")
-        item["seg_box_xyxy"] = self._serialize_box(result.get("box_xyxy"))
-        item["seg_model_name"] = self.model_name
-        item["seg_status"] = "written"
-        item["seg_mask_area_ratio"] = round(float(area_ratio(mask)), 6)
-        item["seg_dino_score"] = self._round_or_none(result.get("dino_score"))
-        item["seg_sam_score"] = self._round_or_none(result.get("sam_score"))
-        item["seg_inference_time"] = self._round_or_none(result.get("inference_time"))
+        item[self._field("seg_seed_mask_path")] = self._normalize_optional_path(previous_mask_path)
+        item[self._field("seg_seed_mask_source")] = previous_mask_source
+        item[self._field("mask_path")] = mask_rel
+        item[self._field("mask_source")] = self._build_mask_source(selected_method)
+        item[self._field("seg_prompt_mode")] = selected_method
+        item[self._field("seg_selected_method")] = selected_method
+        item[self._field("seg_query_text")] = str(result.get("query_text") or "")
+        item[self._field("seg_box_xyxy")] = self._serialize_box(result.get("box_xyxy"))
+        item[self._field("seg_model_name")] = self.model_name
+        item[self._field("seg_status")] = "written"
+        item[self._field("seg_mask_area_ratio")] = round(float(area_ratio(mask)), 6)
+        item[self._field("seg_dino_score")] = self._round_or_none(result.get("dino_score"))
+        item[self._field("seg_sam_score")] = self._round_or_none(result.get("sam_score"))
+        item[self._field("seg_inference_time")] = self._round_or_none(result.get("inference_time"))
         if preview_rel is not None:
-            item["seg_preview_path"] = preview_rel
-        if "seg_error" in item:
-            item.pop("seg_error", None)
+            item[self._field("seg_preview_path")] = preview_rel
+        error_field = self._field("seg_error")
+        if error_field in item:
+            item.pop(error_field, None)
 
         self.counters["updated"] += 1
         self.selected_counts[selected_method] = self.selected_counts.get(selected_method, 0) + 1
@@ -149,8 +155,8 @@ class DatasetUpdater:
             self.counters["skipped_missing_meta"] += 1
             return
         self.counters["image_failures"] += 1
-        item["seg_status"] = reason
-        item["seg_error"] = reason
+        item[self._field("seg_status")] = reason
+        item[self._field("seg_error")] = reason
         self._flush_if_needed(force=False)
 
     def finalize(self) -> None:
@@ -213,11 +219,12 @@ class DatasetUpdater:
 
     def _build_summary(self) -> dict[str, Any]:
         return {
-            "dataset_dir": str(self.dataset_dir),
-            "meta_path": str(self.meta_path),
+            "dataset_dir": self._path_to_posix(self.dataset_dir),
+            "meta_path": self._path_to_posix(self.meta_path),
             "dataset_name": self.dataset_name,
             "model_name": self.model_name,
             "update_method": self.update_method,
+            "field_suffix": self.field_suffix,
             "masks_dir_name": self.masks_dir_name,
             "preview_dir_name": self.preview_dir_name,
             "write_previews": self.write_previews,
@@ -233,6 +240,9 @@ class DatasetUpdater:
 
     def _dataset_rel_path(self, root_name: str, relative: Path) -> str:
         return f"{self.dataset_name}/{root_name}/{relative.as_posix()}"
+
+    def _field(self, base_name: str) -> str:
+        return f"{base_name}{self.field_suffix}" if self.field_suffix else base_name
 
     @staticmethod
     def _serialize_box(box_xyxy: Any) -> list[int] | None:
@@ -250,5 +260,30 @@ class DatasetUpdater:
         return round(float(value), 6)
 
     @staticmethod
+    def _normalize_optional_path(value: Any) -> Any:
+        if value is None:
+            return None
+        return str(value).replace("\\", "/")
+
+    @classmethod
+    def _normalize_path_fields_inplace(cls, payload: Any) -> None:
+        if isinstance(payload, dict):
+            for key, value in payload.items():
+                if isinstance(value, str) and (key == "path" or key.endswith("_path")):
+                    payload[key] = cls._normalize_optional_path(value)
+                else:
+                    cls._normalize_path_fields_inplace(value)
+            return
+        if isinstance(payload, list):
+            for item in payload:
+                cls._normalize_path_fields_inplace(item)
+
+    @staticmethod
+    def _path_to_posix(path: Path) -> str:
+        return path.as_posix()
+
+    @staticmethod
     def _normalize_key(value: str) -> str:
         return value.replace("\\", "/").strip().lower()
+
+
