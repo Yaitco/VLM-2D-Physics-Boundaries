@@ -35,6 +35,24 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--reports-dir", type=Path, default=None)
     p.add_argument("--max-samples", type=int, default=None)
     p.add_argument("--random-seed", type=int, default=42)
+    p.add_argument(
+        "--mask-field",
+        type=str,
+        default="mask_path",
+        help=(
+            "Mask field or alias to use from dataset metadata. "
+            "Examples: mask_path, masks_hint, mask_path_hint, masks_hint_title."
+        ),
+    )
+    p.add_argument(
+        "--mask-preview-field",
+        type=str,
+        default=None,
+        help=(
+            "Optional preview field or alias from dataset metadata. "
+            "Examples: seg_preview_path, masks_preview_hint, seg_preview_path_hint_title."
+        ),
+    )
     p.add_argument("--property-batch-size", type=int, default=8)
     p.add_argument("--include-only-gt-known", action="store_true")
     p.add_argument("--few-shot-k", type=int, default=0)
@@ -57,6 +75,8 @@ def main() -> None:
         protocol_name=args.protocol_name,
         max_samples=args.max_samples,
         random_seed=args.random_seed,
+        mask_field=args.mask_field,
+        mask_preview_field=args.mask_preview_field,
     )
 
     requested_variants = [v.strip() for v in args.variants.split(",") if v.strip()]
@@ -68,6 +88,8 @@ def main() -> None:
     print(f"Loaded samples: {len(samples)}")
     print(f"Variants: {available_variants}")
     print(f"Model: {args.model_key} -> {MODEL_REGISTRY[args.model_key]['model_id']}")
+    print(f"Mask field: {args.mask_field}")
+    print(f"Mask preview field: {args.mask_preview_field}")
 
     for variant in available_variants:
         df = run_validation(
