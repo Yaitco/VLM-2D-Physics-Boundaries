@@ -72,6 +72,18 @@ EVAL_VARIANTS = ["raw"]
 
 Если у samples нет `mask_path`, реально доступен только `raw`.
 
+### Запуск на вручную approved subset
+Если после ручного review у тебя есть:
+`dataset/abo_physics_natural_bg_v2/review_outputs/segmentation_review_approved_meta.json`
+
+можно запускать pipeline прямо на нём:
+
+```python
+META_OVERRIDE_PATH = "dataset/abo_physics_natural_bg_v2/review_outputs/segmentation_review_approved_meta.json"
+```
+
+Тогда основной `meta.json` не трогается, а loader берёт только approved-версию.
+
 ### Zero-shot / few-shot
 ```python
 FEW_SHOT_K = 0

@@ -36,6 +36,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-samples", type=int, default=None)
     p.add_argument("--random-seed", type=int, default=42)
     p.add_argument(
+        "--meta-override-path",
+        type=Path,
+        default=None,
+        help="Optional alternate meta.json path, useful for running only manually approved samples.",
+    )
+    p.add_argument(
         "--mask-field",
         type=str,
         default="mask_path",
@@ -77,6 +83,7 @@ def main() -> None:
         random_seed=args.random_seed,
         mask_field=args.mask_field,
         mask_preview_field=args.mask_preview_field,
+        meta_override_path=args.meta_override_path,
     )
 
     requested_variants = [v.strip() for v in args.variants.split(",") if v.strip()]
@@ -88,6 +95,7 @@ def main() -> None:
     print(f"Loaded samples: {len(samples)}")
     print(f"Variants: {available_variants}")
     print(f"Model: {args.model_key} -> {MODEL_REGISTRY[args.model_key]['model_id']}")
+    print(f"Meta override path: {args.meta_override_path}")
     print(f"Mask field: {args.mask_field}")
     print(f"Mask preview field: {args.mask_preview_field}")
 

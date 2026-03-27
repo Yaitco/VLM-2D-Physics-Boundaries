@@ -405,8 +405,11 @@ def load_samples_for_dataset(
     random_seed: int = 42,
     mask_field: str = 'mask_path',
     mask_preview_field: Optional[str] = None,
+    meta_override_path: Optional[Path] = None,
 ) -> List[Dict[str, Any]]:
     if dataset.dataset_type == 'abo150_annotations':
+        if meta_override_path is not None:
+            raise ValueError('meta_override_path is only supported for datasets with dataset_type="meta_json"')
         if dataset.annotations_path is None:
             raise ValueError(f"annotations_path is missing for dataset '{dataset.dataset_name}'")
         return load_abo150_samples(
@@ -421,10 +424,19 @@ def load_samples_for_dataset(
         )
 
     if dataset.dataset_type == 'meta_json':
-        if dataset.meta_path is None:
+        effective_meta_path = meta_override_path
+        if effective_meta_path is None:
+            effective_meta_path = dataset.meta_path
+        else:
+            effective_meta_path = Path(effective_meta_path)
+            if not effective_meta_path.is_absolute():
+                effective_meta_path = effective_meta_path.resolve()
+        if effective_meta_path is None:
             raise ValueError(f"meta_path is missing for dataset '{dataset.dataset_name}'")
+        if not effective_meta_path.exists():
+            raise FileNotFoundError(f'meta override file not found: {effective_meta_path}')
         return load_meta_subset_samples(
-            meta_path=dataset.meta_path,
+            meta_path=effective_meta_path,
             dataset_dir=dataset.dataset_dir,
             property_specs=property_specs,
             max_samples=max_samples,
