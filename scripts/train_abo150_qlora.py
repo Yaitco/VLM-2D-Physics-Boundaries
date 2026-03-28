@@ -9,6 +9,11 @@ from pathlib import Path
 import sys
 from typing import Any, Dict, List, Sequence
 
+try:
+    import comet_ml  # noqa: F401
+except Exception:  # pragma: no cover
+    comet_ml = None
+
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
@@ -18,7 +23,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from vlm_pipeline import MODEL_REGISTRY
-from vlm_pipeline.comet import get_secret_value
+from vlm_pipeline.comet import get_secret_value, init_comet_experiment
 from vlm_pipeline.runtime import make_bnb_config
 
 try:
@@ -34,6 +39,7 @@ try:
         AutoModelForImageTextToText,
         AutoProcessor,
         Trainer,
+        TrainerCallback,
         TrainingArguments,
     )
 except Exception:  # pragma: no cover
@@ -41,6 +47,7 @@ except Exception:  # pragma: no cover
     AutoModelForImageTextToText = None
     AutoProcessor = None
     Trainer = None
+    TrainerCallback = None
     TrainingArguments = None
 
 try:
@@ -74,6 +81,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lora-dropout", type=float, default=0.05)
     parser.add_argument("--report-to", type=str, default="none")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--disable-comet", action="store_true")
+    parser.add_argument("--comet-project-name", type=str, default="vlm-physics-training")
+    parser.add_argument("--comet-run-name", type=str, default=None)
     parser.add_argument("--push-to-hub", action="store_true")
     parser.add_argument("--hub-model-id", type=str, default=None)
     parser.add_argument("--hub-namespace", type=str, default=None)
@@ -190,6 +200,51 @@ class VLMTrainCollator:
         return full_batch
 
 
+def _is_numeric_metric(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _format_metric_value(key: str, value: float) -> str:
+    if key in {"learning_rate"}:
+        return f"{value:.2e}"
+    if key in {"epoch"}:
+        return f"{value:.2f}"
+    return f"{value:.4f}"
+
+
+class RealtimeMetricsCallback(TrainerCallback):
+    def __init__(self, comet_experiment: Any | None = None) -> None:
+        self.comet_experiment = comet_experiment
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if not getattr(state, "is_world_process_zero", True):
+            return
+        logs = dict(logs or {})
+        numeric_logs = {k: float(v) for k, v in logs.items() if _is_numeric_metric(v)}
+        if not numeric_logs:
+            return
+
+        step = int(getattr(state, "global_step", 0) or 0)
+        epoch = numeric_logs.get("epoch")
+
+        preferred_order = ["loss", "eval_loss", "grad_norm", "learning_rate", "epoch"]
+        rendered: List[str] = []
+        for key in preferred_order:
+            if key in numeric_logs:
+                rendered.append(f"{key}={_format_metric_value(key, numeric_logs[key])}")
+        for key in sorted(numeric_logs.keys()):
+            if key not in preferred_order:
+                rendered.append(f"{key}={_format_metric_value(key, numeric_logs[key])}")
+        print(f"[train step {step}] " + " | ".join(rendered))
+
+        if self.comet_experiment is not None:
+            self.comet_experiment.log_metrics(
+                numeric_logs,
+                step=step,
+                epoch=epoch,
+            )
+
+
 def guess_lora_target_modules(model: torch.nn.Module) -> List[str]:
     candidate_suffixes = [
         "q_proj",
@@ -254,6 +309,30 @@ def load_base_model_and_processor(model_key: str, use_4bit: bool) -> tuple[Any, 
         print("Falling back to AutoModelForCausalLM...")
         model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
     return model, processor, model_id
+
+
+def ensure_input_require_grads(model: torch.nn.Module) -> None:
+    if hasattr(model, "enable_input_require_grads"):
+        try:
+            model.enable_input_require_grads()
+            return
+        except Exception:
+            pass
+
+    input_embeddings = None
+    if hasattr(model, "get_input_embeddings"):
+        try:
+            input_embeddings = model.get_input_embeddings()
+        except Exception:
+            input_embeddings = None
+    if input_embeddings is None:
+        return
+
+    def _make_inputs_require_grad(_module, _inputs, output):
+        if hasattr(output, "requires_grad_"):
+            output.requires_grad_(True)
+
+    input_embeddings.register_forward_hook(_make_inputs_require_grad)
 
 
 def resolve_hf_token(explicit_token: str | None) -> str | None:
@@ -394,7 +473,7 @@ def main() -> None:
     args = parse_args()
     if LoraConfig is None or get_peft_model is None or prepare_model_for_kbit_training is None:
         raise ImportError("peft is required for QLoRA training.")
-    if Trainer is None or TrainingArguments is None:
+    if Trainer is None or TrainingArguments is None or TrainerCallback is None:
         raise ImportError("transformers Trainer is not available. Install notebook dependencies first.")
 
     train_rows = read_jsonl(args.train_jsonl)
@@ -404,13 +483,17 @@ def main() -> None:
         model_key=args.model_key,
         use_4bit=bool(args.use_4bit),
     )
-    model.gradient_checkpointing_enable()
+    try:
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+    except TypeError:
+        model.gradient_checkpointing_enable()
     try:
         model.config.use_cache = False
     except Exception:
         pass
     if args.use_4bit:
         model = prepare_model_for_kbit_training(model)
+    ensure_input_require_grads(model)
 
     target_modules = guess_lora_target_modules(model)
     print(f"LoRA target modules: {target_modules}")
@@ -459,6 +542,49 @@ def main() -> None:
         )
     )
 
+    comet_run_name = args.comet_run_name or output_dir.name
+    comet_run_params = {
+        "model_key": args.model_key,
+        "base_model_id": base_model_id,
+        "train_jsonl": str(args.train_jsonl.resolve()),
+        "val_jsonl": str(args.val_jsonl.resolve()) if args.val_jsonl is not None else None,
+        "train_rows": len(train_rows),
+        "eval_rows": len(eval_rows) if eval_rows is not None else 0,
+        "use_4bit": bool(args.use_4bit),
+        "lora_r": int(args.lora_r),
+        "lora_alpha": int(args.lora_alpha),
+        "lora_dropout": float(args.lora_dropout),
+        "learning_rate": float(args.learning_rate),
+        "num_train_epochs": float(args.num_train_epochs),
+        "gradient_accumulation_steps": int(args.gradient_accumulation_steps),
+        "per_device_train_batch_size": int(args.per_device_train_batch_size),
+        "per_device_eval_batch_size": int(args.per_device_eval_batch_size),
+        "logging_steps": int(args.logging_steps),
+        "save_steps": int(args.save_steps),
+        "eval_steps": int(args.eval_steps),
+        "max_steps": int(args.max_steps),
+        "steps_per_epoch": schedule["steps_per_epoch"],
+        "total_steps": schedule["total_steps"],
+        "estimated_epochs": schedule["estimated_epochs"],
+        "push_to_hub": bool(args.push_to_hub),
+        "hub_model_id": args.hub_model_id,
+        "report_to": args.report_to,
+    }
+    comet_experiment = init_comet_experiment(
+        run_tag=comet_run_name,
+        run_params=comet_run_params,
+        enabled=not bool(args.disable_comet),
+        default_project=args.comet_project_name,
+    )
+    if comet_experiment is not None:
+        print(f"Comet run name: {comet_run_name}")
+        try:
+            run_url = getattr(comet_experiment, "url", None)
+            if run_url:
+                print(f"Comet URL: {run_url}")
+        except Exception:
+            pass
+
     training_args = TrainingArguments(
         **build_training_arguments_kwargs(
             output_dir=output_dir,
@@ -467,91 +593,118 @@ def main() -> None:
         )
     )
 
+    callbacks: List[Any] = [RealtimeMetricsCallback(comet_experiment=comet_experiment)]
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=collator,
+        callbacks=callbacks,
     )
-    train_result = trainer.train()
-    trainer.save_model(str(output_dir))
-    processor.save_pretrained(str(output_dir))
+    try:
+        train_result = trainer.train()
+        trainer.save_model(str(output_dir))
+        processor.save_pretrained(str(output_dir))
 
-    manifest = {
-        "model_key": args.model_key,
-        "base_model_id": base_model_id,
-        "train_jsonl": str(args.train_jsonl.resolve()),
-        "val_jsonl": str(args.val_jsonl.resolve()) if args.val_jsonl is not None else None,
-        "output_dir": str(output_dir),
-        "train_rows": len(train_rows),
-        "eval_rows": len(eval_rows) if eval_rows is not None else 0,
-        "use_4bit": bool(args.use_4bit),
-        "lora_r": int(args.lora_r),
-        "lora_alpha": int(args.lora_alpha),
-        "lora_dropout": float(args.lora_dropout),
-        "target_modules": target_modules,
-        "num_train_epochs": float(args.num_train_epochs),
-        "learning_rate": float(args.learning_rate),
-        "train_runtime_seconds": float(train_result.metrics.get("train_runtime", 0.0)),
-        "train_loss": float(train_result.metrics.get("train_loss", 0.0)),
-        "push_to_hub": bool(args.push_to_hub),
-        "hub_model_id": None,
-    }
-    (output_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-    runtime_model_config = {
-        "backend": "hf_chat",
-        "model_id": f"{base_model_id}+qlora",
-        "base_model_id": base_model_id,
-        "adapter_path": str(output_dir),
-        "use_4bit": bool(args.use_4bit),
-        "max_new_tokens": int(MODEL_REGISTRY[args.model_key].get("max_new_tokens", 128)),
-        "do_sample": bool(MODEL_REGISTRY[args.model_key].get("do_sample", False)),
-    }
-    local_runtime_config_path = output_dir / "runtime_model_config.json"
-    local_runtime_config_path.write_text(
-        json.dumps(runtime_model_config, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-
-    hub_runtime_config_path = None
-    if args.push_to_hub:
-        token = resolve_hf_token(args.hub_token)
-        if not token:
-            raise ValueError("HF_TOKEN is missing. Pass --hub-token or set HF_TOKEN / Colab secret HF_TOKEN.")
-        resolved_hub_model_id = resolve_hub_model_id(
-            explicit_model_id=args.hub_model_id,
-            output_dir=output_dir,
-            token=token,
-            explicit_namespace=args.hub_namespace,
-        )
-        push_adapter_to_hub(
-            output_dir=output_dir,
-            hub_model_id=resolved_hub_model_id,
-            token=token,
-            private=bool(args.hub_private),
-            commit_message=args.hub_commit_message,
-        )
-        manifest["hub_model_id"] = resolved_hub_model_id
+        manifest = {
+            "model_key": args.model_key,
+            "base_model_id": base_model_id,
+            "train_jsonl": str(args.train_jsonl.resolve()),
+            "val_jsonl": str(args.val_jsonl.resolve()) if args.val_jsonl is not None else None,
+            "output_dir": str(output_dir),
+            "train_rows": len(train_rows),
+            "eval_rows": len(eval_rows) if eval_rows is not None else 0,
+            "use_4bit": bool(args.use_4bit),
+            "lora_r": int(args.lora_r),
+            "lora_alpha": int(args.lora_alpha),
+            "lora_dropout": float(args.lora_dropout),
+            "target_modules": target_modules,
+            "num_train_epochs": float(args.num_train_epochs),
+            "learning_rate": float(args.learning_rate),
+            "train_runtime_seconds": float(train_result.metrics.get("train_runtime", 0.0)),
+            "train_loss": float(train_result.metrics.get("train_loss", 0.0)),
+            "push_to_hub": bool(args.push_to_hub),
+            "hub_model_id": None,
+        }
         (output_dir / "manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-        hub_runtime_config = dict(runtime_model_config)
-        hub_runtime_config["adapter_path"] = resolved_hub_model_id
-        hub_runtime_config["model_id"] = f"{base_model_id}+qlora@{resolved_hub_model_id}"
-        hub_runtime_config_path = output_dir / "runtime_model_config.hub.json"
-        hub_runtime_config_path.write_text(
-            json.dumps(hub_runtime_config, ensure_ascii=False, indent=2) + "\n",
+        runtime_model_config = {
+            "backend": "hf_chat",
+            "model_id": f"{base_model_id}+qlora",
+            "base_model_id": base_model_id,
+            "adapter_path": str(output_dir),
+            "use_4bit": bool(args.use_4bit),
+            "max_new_tokens": int(MODEL_REGISTRY[args.model_key].get("max_new_tokens", 128)),
+            "do_sample": bool(MODEL_REGISTRY[args.model_key].get("do_sample", False)),
+        }
+        local_runtime_config_path = output_dir / "runtime_model_config.json"
+        local_runtime_config_path.write_text(
+            json.dumps(runtime_model_config, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
 
-    print(json.dumps(manifest, ensure_ascii=False, indent=2))
-    print("Local runtime config saved to:", local_runtime_config_path)
-    if hub_runtime_config_path is not None:
-        print("Adapter pushed to Hugging Face Hub:", manifest["hub_model_id"])
-        print("Hub runtime config saved to:", hub_runtime_config_path)
+        hub_runtime_config_path = None
+        if args.push_to_hub:
+            token = resolve_hf_token(args.hub_token)
+            if not token:
+                raise ValueError("HF_TOKEN is missing. Pass --hub-token or set HF_TOKEN / Colab secret HF_TOKEN.")
+            resolved_hub_model_id = resolve_hub_model_id(
+                explicit_model_id=args.hub_model_id,
+                output_dir=output_dir,
+                token=token,
+                explicit_namespace=args.hub_namespace,
+            )
+            push_adapter_to_hub(
+                output_dir=output_dir,
+                hub_model_id=resolved_hub_model_id,
+                token=token,
+                private=bool(args.hub_private),
+                commit_message=args.hub_commit_message,
+            )
+            manifest["hub_model_id"] = resolved_hub_model_id
+            (output_dir / "manifest.json").write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            hub_runtime_config = dict(runtime_model_config)
+            hub_runtime_config["adapter_path"] = resolved_hub_model_id
+            hub_runtime_config["model_id"] = f"{base_model_id}+qlora@{resolved_hub_model_id}"
+            hub_runtime_config_path = output_dir / "runtime_model_config.hub.json"
+            hub_runtime_config_path.write_text(
+                json.dumps(hub_runtime_config, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+        if comet_experiment is not None:
+            comet_experiment.log_metrics(
+                {
+                    "final_train_loss": float(train_result.metrics.get("train_loss", 0.0)),
+                    "final_train_runtime_seconds": float(train_result.metrics.get("train_runtime", 0.0)),
+                },
+                step=int(getattr(trainer.state, "global_step", 0) or 0),
+                epoch=getattr(trainer.state, "epoch", None),
+            )
+            comet_experiment.log_parameters(
+                {
+                    "resolved_hub_model_id": manifest.get("hub_model_id"),
+                    "output_dir": str(output_dir),
+                }
+            )
+
+        print(json.dumps(manifest, ensure_ascii=False, indent=2))
+        print("Local runtime config saved to:", local_runtime_config_path)
+        if hub_runtime_config_path is not None:
+            print("Adapter pushed to Hugging Face Hub:", manifest["hub_model_id"])
+            print("Hub runtime config saved to:", hub_runtime_config_path)
+    finally:
+        if comet_experiment is not None:
+            try:
+                comet_experiment.end()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
