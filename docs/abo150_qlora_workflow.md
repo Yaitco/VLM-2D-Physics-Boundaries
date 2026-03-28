@@ -8,6 +8,9 @@
 - при желании сразу выгрузить адаптер на Hugging Face Hub;
 - прогнать validation на тех же 50 объектах.
 
+Готовый Colab-ноутбук под этот сценарий:
+- [ABO150_Qwen3_QLoRA_Colab.ipynb](/home/alexander/Projects/VLM-2D-Physics-Boundaries/notebooks/ABO150_Qwen3_QLoRA_Colab.ipynb)
+
 Сейчас основной рекомендуемый базовый вариант для дообучения:
 - `qwen3_vl_8b`
 

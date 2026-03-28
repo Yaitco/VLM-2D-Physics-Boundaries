@@ -6,6 +6,9 @@
 Рекомендуемый ноутбук:
 [Unified_VLM_Validation_Colab.ipynb](/home/alexander/Projects/VLM-2D-Physics-Boundaries/notebooks/Unified_VLM_Validation_Colab.ipynb)
 
+Для отдельного сценария `ABO150 -> QLoRA -> qwen3 -> Hugging Face Hub` есть готовый ноутбук:
+[ABO150_Qwen3_QLoRA_Colab.ipynb](/home/alexander/Projects/VLM-2D-Physics-Boundaries/notebooks/ABO150_Qwen3_QLoRA_Colab.ipynb)
+
 Старые специализированные ноутбуки перенесены в:
 [archive_review/notebooks_legacy](/home/alexander/Projects/VLM-2D-Physics-Boundaries/archive_review/notebooks_legacy)
 
