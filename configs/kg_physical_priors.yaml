@@ -1,0 +1,325 @@
+# configs/kg_physical_priors.yaml
+version: 1
+
+properties:
+  - intrinsic.main_material
+  - intrinsic.transparency_class
+  - intrinsic.glossiness_class
+  - intrinsic.surface_roughness_class
+  - intrinsic.shape_class
+  - intrinsic.rigidity_class
+  - intrinsic.friction_class
+  - intrinsic.metallic_appearance
+  - intrinsic.state_of_matter
+  - affordance.breakable
+
+# Нормализация синонимов/вариантов записи
+aliases:
+  intrinsic.main_material:
+    ceramic/stone: ceramic_stone
+    ceramic-stone: ceramic_stone
+    paper/cardboard: paper_cardboard
+    paper-cardboard: paper_cardboard
+  intrinsic.glossiness_class:
+    matte: low
+    glossy: high
+  intrinsic.surface_roughness_class:
+    smooth_surface: smooth
+    rough_surface: rough
+  affordance.breakable:
+    true: true
+    false: false
+
+# Базовые material priors:
+# вес > 0 усиливает совместимость, вес < 0 штрафует
+material_priors:
+  glass:
+    intrinsic.transparency_class:
+      transparent: 2.5
+      translucent: 1.0
+      opaque: -1.5
+    intrinsic.rigidity_class:
+      rigid: 2.0
+      flexible: -2.0
+      deformable: -2.0
+    affordance.breakable:
+      true: 2.5
+      false: -1.5
+    intrinsic.glossiness_class:
+      high: 1.5
+      medium: 0.8
+      low: -0.6
+    intrinsic.surface_roughness_class:
+      smooth: 1.5
+      rough: -1.0
+    intrinsic.metallic_appearance:
+      true: -1.5
+      false: 0.8
+
+  metal:
+    intrinsic.transparency_class:
+      opaque: 2.5
+      transparent: -3.0
+      translucent: -1.5
+    intrinsic.rigidity_class:
+      rigid: 2.5
+      flexible: -1.5
+      deformable: -1.0
+    affordance.breakable:
+      false: 1.0
+      true: -0.5
+    intrinsic.glossiness_class:
+      high: 1.5
+      medium: 1.0
+      low: -0.4
+    intrinsic.surface_roughness_class:
+      smooth: 1.0
+      rough: -0.5
+    intrinsic.metallic_appearance:
+      true: 3.0
+      false: -2.0
+
+  plastic:
+    intrinsic.transparency_class:
+      opaque: 1.0
+      transparent: 0.8
+      translucent: 0.8
+    intrinsic.rigidity_class:
+      rigid: 0.8
+      flexible: 0.8
+      deformable: 0.6
+    affordance.breakable:
+      false: 0.8
+      true: -0.2
+    intrinsic.glossiness_class:
+      high: 0.8
+      medium: 1.0
+      low: 0.2
+    intrinsic.surface_roughness_class:
+      smooth: 0.8
+      rough: -0.2
+    intrinsic.metallic_appearance:
+      false: 1.2
+      true: -1.5
+
+  wood:
+    intrinsic.transparency_class:
+      opaque: 2.0
+      transparent: -3.0
+      translucent: -1.0
+    intrinsic.rigidity_class:
+      rigid: 1.8
+      flexible: -1.0
+      deformable: -1.0
+    affordance.breakable:
+      false: 0.6
+      true: 0.2
+    intrinsic.glossiness_class:
+      low: 1.2
+      medium: 0.6
+      high: -0.6
+    intrinsic.surface_roughness_class:
+      rough: 1.2
+      smooth: 0.3
+    intrinsic.metallic_appearance:
+      false: 1.5
+      true: -2.0
+
+  fabric:
+    intrinsic.transparency_class:
+      opaque: 2.0
+      translucent: 0.2
+      transparent: -3.0
+    intrinsic.rigidity_class:
+      flexible: 2.5
+      deformable: 2.0
+      rigid: -2.0
+    affordance.breakable:
+      false: 1.0
+      true: -1.0
+    intrinsic.glossiness_class:
+      low: 1.2
+      medium: 0.4
+      high: -0.6
+    intrinsic.surface_roughness_class:
+      rough: 1.2
+      smooth: -0.4
+    intrinsic.metallic_appearance:
+      false: 2.0
+      true: -2.5
+
+  paper_cardboard:
+    intrinsic.transparency_class:
+      opaque: 1.8
+      translucent: 0.2
+      transparent: -2.0
+    intrinsic.rigidity_class:
+      deformable: 0.8
+      flexible: 0.8
+      rigid: 0.4
+    affordance.breakable:
+      true: 0.8
+      false: -0.2
+    intrinsic.glossiness_class:
+      low: 1.0
+      medium: 0.2
+      high: -0.8
+    intrinsic.surface_roughness_class:
+      rough: 0.8
+      smooth: 0.2
+    intrinsic.metallic_appearance:
+      false: 1.2
+      true: -2.0
+
+  ceramic_stone:
+    intrinsic.transparency_class:
+      opaque: 2.2
+      translucent: -0.5
+      transparent: -2.5
+    intrinsic.rigidity_class:
+      rigid: 2.2
+      flexible: -2.5
+      deformable: -2.5
+    affordance.breakable:
+      true: 1.8
+      false: -0.2
+    intrinsic.glossiness_class:
+      low: 0.6
+      medium: 0.6
+      high: 0.2
+    intrinsic.surface_roughness_class:
+      rough: 0.8
+      smooth: 0.6
+    intrinsic.metallic_appearance:
+      false: 1.8
+      true: -2.0
+
+  rubber:
+    intrinsic.transparency_class:
+      opaque: 2.0
+      transparent: -2.5
+      translucent: -0.5
+    intrinsic.rigidity_class:
+      flexible: 2.0
+      deformable: 1.8
+      rigid: -1.5
+    affordance.breakable:
+      false: 1.8
+      true: -1.5
+    intrinsic.glossiness_class:
+      low: 1.0
+      medium: 0.2
+      high: -0.6
+    intrinsic.surface_roughness_class:
+      rough: 1.0
+      smooth: -0.2
+    intrinsic.friction_class:
+      high: 2.5
+      medium: 0.5
+      low: -2.0
+    intrinsic.metallic_appearance:
+      false: 2.0
+      true: -2.5
+
+  leather:
+    intrinsic.transparency_class:
+      opaque: 2.0
+      transparent: -3.0
+    intrinsic.rigidity_class:
+      flexible: 1.2
+      deformable: 1.0
+      rigid: -0.8
+    affordance.breakable:
+      false: 1.0
+      true: -0.8
+    intrinsic.glossiness_class:
+      low: 0.8
+      medium: 0.8
+      high: -0.2
+    intrinsic.surface_roughness_class:
+      rough: 0.8
+      smooth: 0.4
+    intrinsic.metallic_appearance:
+      false: 1.6
+      true: -2.0
+
+pairwise_rules:
+  # roughness <-> friction
+  - left_property: intrinsic.surface_roughness_class
+    right_property: intrinsic.friction_class
+    weights:
+      rough:
+        high: 2.0
+        medium: 0.7
+        low: -1.2
+      smooth:
+        low: 1.6
+        medium: 0.4
+        high: -0.8
+
+  # glossiness <-> roughness
+  - left_property: intrinsic.glossiness_class
+    right_property: intrinsic.surface_roughness_class
+    weights:
+      high:
+        smooth: 1.8
+        rough: -1.4
+      medium:
+        smooth: 0.5
+        rough: 0.2
+      low:
+        rough: 1.0
+        smooth: 0.2
+
+  # material-like metallic appearance
+  - left_property: intrinsic.metallic_appearance
+    right_property: intrinsic.main_material
+    weights:
+      true:
+        metal: 3.0
+        glass: -1.0
+        wood: -2.0
+        fabric: -2.5
+        plastic: -1.0
+      false:
+        metal: -1.5
+        glass: 0.2
+        wood: 0.8
+        fabric: 1.0
+        plastic: 0.4
+
+  # transparency <-> state of matter
+  - left_property: intrinsic.state_of_matter
+    right_property: intrinsic.transparency_class
+    weights:
+      solid:
+        opaque: 0.6
+        transparent: 0.4
+        translucent: 0.3
+      liquid:
+        transparent: 1.2
+        translucent: 0.6
+        opaque: -0.6
+      gas:
+        transparent: 0.8
+        translucent: 0.2
+        opaque: -1.5
+
+  # rigidity <-> breakable
+  - left_property: intrinsic.rigidity_class
+    right_property: affordance.breakable
+    weights:
+      rigid:
+        true: 0.5
+        false: 0.3
+      flexible:
+        false: 1.0
+        true: -0.8
+      deformable:
+        false: 1.0
+        true: -1.0
+
+defaults:
+  keep_original_bias: 0.75
+  change_penalty: 0.55
+  max_coordinate_passes: 6
