@@ -138,6 +138,16 @@ CUSTOM_MODEL_KEY = "qwen3_vl_8b_qlora_main_material_hub"
 SELECTED_MODEL = CUSTOM_MODEL_KEY
 ```
 
+Если хочешь валидировать adapter только по тем свойствам, на которых он обучался:
+```python
+PROPERTY_KEYS_MANIFEST_PATH = "outputs/abo150_qwen3_main_material_dataset/manifest.json"
+```
+
+или явно:
+```python
+PROPERTY_KEYS_OVERRIDE = ["intrinsic.main_material"]
+```
+
 ## Рекомендуемый порядок прогонов
 
 ### Первый baseline

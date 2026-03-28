@@ -176,8 +176,11 @@ CUSTOM_MODEL_KEY = 'qwen3_vl_8b_qlora_main_material_hub'
 SELECTED_MODEL = CUSTOM_MODEL_KEY
 
 SAMPLE_IDS_PATH = 'dataset/abo_150_expanded/splits/seed42_val50_train100/val_ids.txt'
+PROPERTY_KEYS_MANIFEST_PATH = 'outputs/abo150_qwen3_main_material_dataset/manifest.json'
 EVAL_VARIANTS = ['raw']
 ```
+
+Если `PROPERTY_KEYS_MANIFEST_PATH` задан, unified validation notebook автоматически ограничит метрики только теми свойствами, на которых строился QLoRA trainset.
 
 ## 5. Валидировать больше базовых моделей на тех же 50 объектах
 Используй:
