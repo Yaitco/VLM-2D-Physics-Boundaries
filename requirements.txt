@@ -12,4 +12,5 @@ tqdm>=4.66
 accelerate>=1.0
 peft>=0.14
 bitsandbytes>=0.43
+pyyaml>=6.0
 git+https://github.com/facebookresearch/segment-anything.git
