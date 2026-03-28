@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import os
+from inspect import signature
 from pathlib import Path
 import sys
 from typing import Any, Dict, List, Sequence
@@ -347,6 +348,48 @@ def estimate_training_schedule(
     }
 
 
+def build_training_arguments_kwargs(
+    output_dir: Path,
+    args: argparse.Namespace,
+    has_eval_dataset: bool,
+) -> Dict[str, Any]:
+    kwargs: Dict[str, Any] = {
+        "output_dir": str(output_dir),
+        "learning_rate": float(args.learning_rate),
+        "weight_decay": float(args.weight_decay),
+        "warmup_ratio": float(args.warmup_ratio),
+        "num_train_epochs": float(args.num_train_epochs),
+        "per_device_train_batch_size": int(args.per_device_train_batch_size),
+        "per_device_eval_batch_size": int(args.per_device_eval_batch_size),
+        "gradient_accumulation_steps": int(args.gradient_accumulation_steps),
+        "logging_steps": int(args.logging_steps),
+        "logging_first_step": True,
+        "save_steps": int(args.save_steps),
+        "eval_steps": int(args.eval_steps),
+        "max_steps": int(args.max_steps),
+        "bf16": torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
+        "fp16": torch.cuda.is_available() and not torch.cuda.is_bf16_supported(),
+        "remove_unused_columns": False,
+        "report_to": args.report_to,
+        "load_best_model_at_end": False,
+        "dataloader_num_workers": 0,
+        "seed": int(args.seed),
+        "disable_tqdm": bool(args.disable_tqdm),
+        "run_name": output_dir.name,
+        "save_strategy": "steps",
+        "logging_strategy": "steps",
+    }
+
+    eval_strategy_value = "steps" if has_eval_dataset else "no"
+    supported = set(signature(TrainingArguments.__init__).parameters)
+    if "evaluation_strategy" in supported:
+        kwargs["evaluation_strategy"] = eval_strategy_value
+    elif "eval_strategy" in supported:
+        kwargs["eval_strategy"] = eval_strategy_value
+
+    return {key: value for key, value in kwargs.items() if key in supported}
+
+
 def main() -> None:
     args = parse_args()
     if LoraConfig is None or get_peft_model is None or prepare_model_for_kbit_training is None:
@@ -417,32 +460,11 @@ def main() -> None:
     )
 
     training_args = TrainingArguments(
-        output_dir=str(output_dir),
-        learning_rate=float(args.learning_rate),
-        weight_decay=float(args.weight_decay),
-        warmup_ratio=float(args.warmup_ratio),
-        num_train_epochs=float(args.num_train_epochs),
-        per_device_train_batch_size=int(args.per_device_train_batch_size),
-        per_device_eval_batch_size=int(args.per_device_eval_batch_size),
-        gradient_accumulation_steps=int(args.gradient_accumulation_steps),
-        logging_strategy="steps",
-        logging_steps=int(args.logging_steps),
-        logging_first_step=True,
-        save_steps=int(args.save_steps),
-        eval_steps=int(args.eval_steps),
-        max_steps=int(args.max_steps),
-        bf16=torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
-        fp16=torch.cuda.is_available() and not torch.cuda.is_bf16_supported(),
-        remove_unused_columns=False,
-        report_to=args.report_to,
-        evaluation_strategy="steps" if eval_dataset is not None else "no",
-        save_strategy="steps",
-        load_best_model_at_end=False,
-        dataloader_num_workers=0,
-        seed=int(args.seed),
-        disable_tqdm=bool(args.disable_tqdm),
-        log_level="info",
-        run_name=output_dir.name,
+        **build_training_arguments_kwargs(
+            output_dir=output_dir,
+            args=args,
+            has_eval_dataset=eval_dataset is not None,
+        )
     )
 
     trainer = Trainer(
