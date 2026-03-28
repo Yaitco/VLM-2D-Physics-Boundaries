@@ -76,6 +76,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-steps", type=int, default=25)
     parser.add_argument("--max-steps", type=int, default=-1)
     parser.add_argument("--disable-tqdm", action="store_true")
+    parser.add_argument("--disable-gradient-checkpointing", action="store_true")
     parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--lora-alpha", type=int, default=32)
     parser.add_argument("--lora-dropout", type=float, default=0.05)
@@ -235,7 +236,7 @@ class RealtimeMetricsCallback(TrainerCallback):
         for key in sorted(numeric_logs.keys()):
             if key not in preferred_order:
                 rendered.append(f"{key}={_format_metric_value(key, numeric_logs[key])}")
-        print(f"[train step {step}] " + " | ".join(rendered))
+        print(f"[train step {step}] " + " | ".join(rendered), flush=True)
 
         if self.comet_experiment is not None:
             self.comet_experiment.log_metrics(
@@ -483,10 +484,11 @@ def main() -> None:
         model_key=args.model_key,
         use_4bit=bool(args.use_4bit),
     )
-    try:
-        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
-    except TypeError:
-        model.gradient_checkpointing_enable()
+    if not args.disable_gradient_checkpointing:
+        try:
+            model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        except TypeError:
+            model.gradient_checkpointing_enable()
     try:
         model.config.use_cache = False
     except Exception:
@@ -557,6 +559,7 @@ def main() -> None:
         "learning_rate": float(args.learning_rate),
         "num_train_epochs": float(args.num_train_epochs),
         "gradient_accumulation_steps": int(args.gradient_accumulation_steps),
+        "disable_gradient_checkpointing": bool(args.disable_gradient_checkpointing),
         "per_device_train_batch_size": int(args.per_device_train_batch_size),
         "per_device_eval_batch_size": int(args.per_device_eval_batch_size),
         "logging_steps": int(args.logging_steps),
