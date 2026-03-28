@@ -60,6 +60,13 @@ from .specs import (
     values_equal,
 )
 
+from .kg import (
+    KGPriorConfig,
+    PhysicalKGReranker,
+    load_kg_prior_config,
+    make_kg_reranker,
+)
+
 __all__ = [
     "ABO_NATURAL_BG_V2_SCHEMA_PATH",
     "BACKEND_INFER",
@@ -116,4 +123,8 @@ __all__ = [
     "strip_code_fences",
     "unload_runtime",
     "values_equal",
+    "KGPriorConfig",
+    "PhysicalKGReranker",
+    "load_kg_prior_config",
+    "make_kg_reranker",
 ]
