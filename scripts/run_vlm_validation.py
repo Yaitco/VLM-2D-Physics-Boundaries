@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 
@@ -22,6 +23,8 @@ from vlm_pipeline import (
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Run the unified VLM validation pipeline on a supported dataset.")
+    p.add_argument("--custom-model-key", type=str, default=None)
+    p.add_argument("--model-config-path", type=Path, default=None)
     p.add_argument(
         "--dataset-name",
         type=str,
@@ -35,6 +38,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--reports-dir", type=Path, default=None)
     p.add_argument("--max-samples", type=int, default=None)
     p.add_argument("--random-seed", type=int, default=42)
+    p.add_argument(
+        "--sample-ids-path",
+        type=Path,
+        default=None,
+        help="Optional TXT/JSON file with explicit image_ids to evaluate.",
+    )
     p.add_argument(
         "--meta-override-path",
         type=Path,
@@ -72,6 +81,14 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    model_registry = dict(MODEL_REGISTRY)
+    selected_model_key = args.model_key
+    if args.model_config_path is not None:
+        selected_model_key = args.custom_model_key or f"{args.model_key}_custom"
+        cfg = json.loads(args.model_config_path.read_text(encoding="utf-8"))
+        if not isinstance(cfg, dict):
+            raise ValueError(f"Expected a JSON object in {args.model_config_path}")
+        model_registry[selected_model_key] = cfg
     dataset = get_dataset_context(args.dataset_name, dataset_root=args.dataset_root)
     schema_path = resolve_protocol_schema_path(dataset, args.protocol_name)
     property_specs = load_protocol_property_specs(protocol_name=args.protocol_name, schema_path=schema_path)
@@ -84,6 +101,7 @@ def main() -> None:
         mask_field=args.mask_field,
         mask_preview_field=args.mask_preview_field,
         meta_override_path=args.meta_override_path,
+        sample_ids_path=args.sample_ids_path,
     )
 
     requested_variants = [v.strip() for v in args.variants.split(",") if v.strip()]
@@ -94,17 +112,18 @@ def main() -> None:
     print(f"Protocol: {args.protocol_name}")
     print(f"Loaded samples: {len(samples)}")
     print(f"Variants: {available_variants}")
-    print(f"Model: {args.model_key} -> {MODEL_REGISTRY[args.model_key]['model_id']}")
+    print(f"Model: {selected_model_key} -> {model_registry[selected_model_key]['model_id']}")
     print(f"Meta override path: {args.meta_override_path}")
+    print(f"Sample ids path: {args.sample_ids_path}")
     print(f"Mask field: {args.mask_field}")
     print(f"Mask preview field: {args.mask_preview_field}")
 
     for variant in available_variants:
         df = run_validation(
-            model_key=args.model_key,
+            model_key=selected_model_key,
             samples=samples,
             property_specs=property_specs,
-            model_registry=MODEL_REGISTRY,
+            model_registry=model_registry,
             variant=variant,
             property_batch_size=args.property_batch_size,
             include_only_gt_known=args.include_only_gt_known,
@@ -117,9 +136,9 @@ def main() -> None:
         )
         save_report(
             df=df,
-            model_key=args.model_key,
+            model_key=selected_model_key,
             variant=variant,
-            model_registry=MODEL_REGISTRY,
+            model_registry=model_registry,
             property_specs=property_specs,
             reports_dir=reports_dir / args.protocol_name,
             comet_experiment=None,

@@ -1,0 +1,9 @@
+{
+  "annotations_path": "/home/alexander/Projects/VLM-2D-Physics-Boundaries/dataset/abo_150_expanded/selected_150_annotations.jsonl",
+  "seed": 42,
+  "total_size": 150,
+  "val_size": 50,
+  "train_size": 100,
+  "val_ids_path": "/home/alexander/Projects/VLM-2D-Physics-Boundaries/dataset/abo_150_expanded/splits/seed42_val50_train100/val_ids.txt",
+  "train_ids_path": "/home/alexander/Projects/VLM-2D-Physics-Boundaries/dataset/abo_150_expanded/splits/seed42_val50_train100/train_ids.txt"
+}

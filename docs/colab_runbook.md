@@ -21,6 +21,10 @@
 
 Без этих ключей ноутбук тоже запустится, просто Comet будет отключён.
 
+Если хочешь дообучать QLoRA и сразу пушить adapter'ы на Hugging Face Hub, добавь ещё:
+- `HF_TOKEN`
+- `HF_USERNAME` (опционально, но удобно для автогенерации repo id)
+
 ### 2. Runtime
 Рекомендуется GPU runtime.
 
@@ -63,6 +67,11 @@ PROTOCOL_NAME = "narrow_core"
 ### Модель
 ```python
 SELECTED_MODEL = "qwen2_5_vl_7b"
+```
+
+Для QLoRA-пилота на `abo_150_expanded` сейчас лучше начинать с:
+```python
+SELECTED_MODEL = "qwen3_vl_8b"
 ```
 
 ### Визуальные варианты
@@ -111,6 +120,20 @@ RANDOM_SEED = 42
 ```
 
 Так удобно делать быстрые сравнения моделей на одном и том же subset.
+
+### Фиксированный holdout для ABO150
+Если хочешь гонять все модели и adapter'ы на одних и тех же 50 объектах:
+```python
+SAMPLE_IDS_PATH = "dataset/abo_150_expanded/splits/seed42_val50_train100/val_ids.txt"
+```
+
+### Подключение локального или Hub adapter'а
+Для validation дообученного adapter'а:
+```python
+CUSTOM_MODEL_CONFIG_PATH = "outputs/abo150_qwen3_main_material/runtime_model_config.hub.json"
+CUSTOM_MODEL_KEY = "qwen3_vl_8b_qlora_main_material_hub"
+SELECTED_MODEL = CUSTOM_MODEL_KEY
+```
 
 ## Рекомендуемый порядок прогонов
 

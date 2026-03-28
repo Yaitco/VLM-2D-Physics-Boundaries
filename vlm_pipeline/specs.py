@@ -207,6 +207,19 @@ def load_protocol_property_specs(
     raise ValueError(f'Unknown protocol_name: {protocol_name}')
 
 
+def filter_property_specs(
+    property_specs: Dict[str, PropertySpec],
+    include_keys: Optional[Sequence[str]] = None,
+) -> Dict[str, PropertySpec]:
+    if include_keys is None:
+        return dict(property_specs)
+    ordered_keys = [str(key) for key in include_keys]
+    missing = [key for key in ordered_keys if key not in property_specs]
+    if missing:
+        raise ValueError(f'Unknown property keys requested: {missing}')
+    return {key: property_specs[key] for key in ordered_keys}
+
+
 def resolve_protocol_schema_path(dataset: DatasetContext, protocol_name: str) -> Optional[Path]:
     if protocol_name in {'expanded_ontology', 'full_expanded', 'narrow_core'}:
         if dataset.schema_path is None:

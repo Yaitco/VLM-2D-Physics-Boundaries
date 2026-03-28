@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gc
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 import torch
@@ -12,13 +13,18 @@ try:
         AutoModelForCausalLM,
         AutoModelForImageTextToText,
         AutoProcessor,
-        BitsAndBytesConfig,
+    BitsAndBytesConfig,
     )
 except Exception:  # pragma: no cover
     AutoModelForCausalLM = None
     AutoModelForImageTextToText = None
     AutoProcessor = None
     BitsAndBytesConfig = None
+
+try:
+    from peft import PeftModel
+except Exception:  # pragma: no cover
+    PeftModel = None
 
 
 @dataclass
@@ -53,13 +59,25 @@ def load_hf_chat_runtime(name: str, cfg: Dict[str, Any]) -> VLMRuntime:
         raise ImportError("transformers is not installed. Install notebook dependencies first.")
 
     model_id = cfg["model_id"]
+    base_model_id = cfg.get("base_model_id", model_id)
+    adapter_path = cfg.get("adapter_path")
+    if adapter_path is not None:
+        adapter_candidate = Path(str(adapter_path)).expanduser()
+        if adapter_candidate.exists():
+            adapter_path = str(adapter_candidate.resolve())
+        else:
+            adapter_path = str(adapter_path).strip()
+        if not adapter_path:
+            raise ValueError("adapter_path is empty")
+        if PeftModel is None:
+            raise ImportError("peft is required to load LoRA/QLoRA adapters.")
     use_4bit = bool(cfg.get("use_4bit", True))
     gen_kwargs = {
         "max_new_tokens": int(cfg.get("max_new_tokens", 512)),
         "do_sample": bool(cfg.get("do_sample", False)),
     }
 
-    processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+    processor = AutoProcessor.from_pretrained(base_model_id, trust_remote_code=True)
     tokenizer = getattr(processor, "tokenizer", None)
     if tokenizer is not None:
         try:
@@ -80,11 +98,14 @@ def load_hf_chat_runtime(name: str, cfg: Dict[str, Any]) -> VLMRuntime:
         model_kwargs["torch_dtype"] = torch.float16
 
     try:
-        model = AutoModelForImageTextToText.from_pretrained(model_id, **model_kwargs)
+        model = AutoModelForImageTextToText.from_pretrained(base_model_id, **model_kwargs)
     except Exception as exc:
         print(f"AutoModelForImageTextToText failed: {exc}")
         print("Falling back to AutoModelForCausalLM...")
-        model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+        model = AutoModelForCausalLM.from_pretrained(base_model_id, **model_kwargs)
+
+    if adapter_path is not None:
+        model = PeftModel.from_pretrained(model, adapter_path, is_trainable=False)
 
     generation_config = getattr(model, "generation_config", None)
     if generation_config is not None:

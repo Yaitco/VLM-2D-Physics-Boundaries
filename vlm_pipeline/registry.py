@@ -9,6 +9,20 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
 MODEL_REGISTRY = {
+    "qwen2_vl_2b": {
+        "backend": "hf_chat",
+        "model_id": "Qwen/Qwen2-VL-2B-Instruct",
+        "use_4bit": True,
+        "max_new_tokens": 128,
+        "do_sample": False,
+    },
+    "qwen2_5_vl_3b": {
+        "backend": "hf_chat",
+        "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
+        "use_4bit": True,
+        "max_new_tokens": 128,
+        "do_sample": False,
+    },
     "qwen3_vl_8b": {
         "backend": "hf_chat",
         "model_id": "Qwen/Qwen3-VL-8B-Instruct",

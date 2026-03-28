@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import random
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from .registry import DatasetContext
 from .specs import PropertySpec, _normalize_token, normalize_value
@@ -90,6 +90,34 @@ def _attach_mask_fields(
     if preview_path is not None and preview_path.exists():
         sample['mask_preview_path'] = str(preview_path)
         sample['mask_preview_field'] = mask_preview_field
+
+
+def _load_allowed_image_ids(sample_ids_path: Optional[Path]) -> Optional[Set[str]]:
+    if sample_ids_path is None:
+        return None
+    path = Path(sample_ids_path)
+    if not path.is_absolute():
+        path = path.resolve()
+    if not path.exists():
+        raise FileNotFoundError(f'sample ids file not found: {path}')
+
+    if path.suffix.lower() == '.json':
+        payload = json.loads(path.read_text(encoding='utf-8'))
+        if isinstance(payload, list):
+            return {str(item) for item in payload if str(item).strip()}
+        if isinstance(payload, dict):
+            for key in ('image_ids', 'ids', 'samples'):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    return {str(item) for item in value if str(item).strip()}
+        raise ValueError(f'Unsupported JSON format for sample ids file: {path}')
+
+    ids = {
+        line.strip()
+        for line in path.read_text(encoding='utf-8').splitlines()
+        if line.strip()
+    }
+    return ids
 
 
 def _resolve_panel_path(panel_path_raw: str, dataset_dir: Path, panels_dir: Path, obj_id: str) -> Path:
@@ -263,6 +291,7 @@ def load_abo150_samples(
     random_seed: int = 42,
     mask_field: str = 'mask_path',
     mask_preview_field: Optional[str] = None,
+    allowed_image_ids: Optional[Set[str]] = None,
 ) -> List[Dict[str, Any]]:
     mask_field = _normalize_field_choice(mask_field, MASK_FIELD_ALIASES, 'mask_field') or 'mask_path'
     if mask_preview_field is None:
@@ -285,6 +314,8 @@ def load_abo150_samples(
             record = json.loads(line)
             obj_id = str(record.get('obj_id') or '')
             if not obj_id:
+                continue
+            if allowed_image_ids is not None and obj_id not in allowed_image_ids:
                 continue
 
             panels = record.get('panels', {}) if isinstance(record.get('panels'), dict) else {}
@@ -333,6 +364,7 @@ def load_meta_subset_samples(
     random_seed: int = 42,
     mask_field: str = 'mask_path',
     mask_preview_field: Optional[str] = None,
+    allowed_image_ids: Optional[Set[str]] = None,
 ) -> List[Dict[str, Any]]:
     rows = json.loads(meta_path.read_text(encoding='utf-8'))
     if not isinstance(rows, list):
@@ -357,6 +389,8 @@ def load_meta_subset_samples(
         image_id = str(item.get('image_id') or '')
         image_rel = str(item.get('path') or '').strip()
         if not image_id or not image_rel:
+            continue
+        if allowed_image_ids is not None and image_id not in allowed_image_ids:
             continue
 
         gt_raw = item.get('properties', {})
@@ -406,7 +440,9 @@ def load_samples_for_dataset(
     mask_field: str = 'mask_path',
     mask_preview_field: Optional[str] = None,
     meta_override_path: Optional[Path] = None,
+    sample_ids_path: Optional[Path] = None,
 ) -> List[Dict[str, Any]]:
+    allowed_image_ids = _load_allowed_image_ids(sample_ids_path)
     if dataset.dataset_type == 'abo150_annotations':
         if meta_override_path is not None:
             raise ValueError('meta_override_path is only supported for datasets with dataset_type="meta_json"')
@@ -421,6 +457,7 @@ def load_samples_for_dataset(
             random_seed=random_seed,
             mask_field=mask_field,
             mask_preview_field=mask_preview_field,
+            allowed_image_ids=allowed_image_ids,
         )
 
     if dataset.dataset_type == 'meta_json':
@@ -443,6 +480,7 @@ def load_samples_for_dataset(
             random_seed=random_seed,
             mask_field=mask_field,
             mask_preview_field=mask_preview_field,
+            allowed_image_ids=allowed_image_ids,
         )
 
     raise ValueError(f'Unsupported dataset_type: {dataset.dataset_type}')
