@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import sys
@@ -66,6 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--save-steps", type=int, default=25)
     parser.add_argument("--eval-steps", type=int, default=25)
     parser.add_argument("--max-steps", type=int, default=-1)
+    parser.add_argument("--disable-tqdm", action="store_true")
     parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--lora-alpha", type=int, default=32)
     parser.add_argument("--lora-dropout", type=float, default=0.05)
@@ -199,8 +201,17 @@ def guess_lora_target_modules(model: torch.nn.Module) -> List[str]:
         "out_proj",
     ]
     found = set()
+
+    def _is_supported_linear_like(module: torch.nn.Module) -> bool:
+        if isinstance(module, torch.nn.Linear):
+            return True
+        cls_name = module.__class__.__name__.lower()
+        if cls_name in {"linear4bit", "linear8bitlt"}:
+            return True
+        return hasattr(module, "weight") and callable(getattr(module, "forward", None))
+
     for module_name, module in model.named_modules():
-        if not isinstance(module, torch.nn.Linear):
+        if not _is_supported_linear_like(module):
             continue
         leaf = module_name.split(".")[-1]
         if leaf in candidate_suffixes:
@@ -313,6 +324,29 @@ def push_adapter_to_hub(
     )
 
 
+def estimate_training_schedule(
+    train_rows: int,
+    per_device_train_batch_size: int,
+    gradient_accumulation_steps: int,
+    num_train_epochs: float,
+    max_steps: int,
+) -> Dict[str, int]:
+    micro_batch = max(1, int(per_device_train_batch_size))
+    grad_accum = max(1, int(gradient_accumulation_steps))
+    steps_per_epoch = max(1, math.ceil(train_rows / (micro_batch * grad_accum)))
+    if int(max_steps) > 0:
+        total_steps = int(max_steps)
+        estimated_epochs = max(1, math.ceil(total_steps / steps_per_epoch))
+    else:
+        estimated_epochs = max(1, math.ceil(float(num_train_epochs)))
+        total_steps = max(1, math.ceil(steps_per_epoch * float(num_train_epochs)))
+    return {
+        "steps_per_epoch": int(steps_per_epoch),
+        "total_steps": int(total_steps),
+        "estimated_epochs": int(estimated_epochs),
+    }
+
+
 def main() -> None:
     args = parse_args()
     if LoraConfig is None or get_peft_model is None or prepare_model_for_kbit_training is None:
@@ -328,6 +362,10 @@ def main() -> None:
         use_4bit=bool(args.use_4bit),
     )
     model.gradient_checkpointing_enable()
+    try:
+        model.config.use_cache = False
+    except Exception:
+        pass
     if args.use_4bit:
         model = prepare_model_for_kbit_training(model)
 
@@ -354,6 +392,29 @@ def main() -> None:
     train_dataset = ABO150SFTDataset(train_rows)
     eval_dataset = ABO150SFTDataset(eval_rows) if eval_rows is not None else None
     collator = VLMTrainCollator(processor)
+    schedule = estimate_training_schedule(
+        train_rows=len(train_rows),
+        per_device_train_batch_size=int(args.per_device_train_batch_size),
+        gradient_accumulation_steps=int(args.gradient_accumulation_steps),
+        num_train_epochs=float(args.num_train_epochs),
+        max_steps=int(args.max_steps),
+    )
+    print("Training schedule:")
+    print(
+        json.dumps(
+            {
+                "train_rows": len(train_rows),
+                "eval_rows": len(eval_rows) if eval_rows is not None else 0,
+                "per_device_train_batch_size": int(args.per_device_train_batch_size),
+                "gradient_accumulation_steps": int(args.gradient_accumulation_steps),
+                "num_train_epochs": float(args.num_train_epochs),
+                "max_steps": int(args.max_steps),
+                **schedule,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
     training_args = TrainingArguments(
         output_dir=str(output_dir),
@@ -364,7 +425,9 @@ def main() -> None:
         per_device_train_batch_size=int(args.per_device_train_batch_size),
         per_device_eval_batch_size=int(args.per_device_eval_batch_size),
         gradient_accumulation_steps=int(args.gradient_accumulation_steps),
+        logging_strategy="steps",
         logging_steps=int(args.logging_steps),
+        logging_first_step=True,
         save_steps=int(args.save_steps),
         eval_steps=int(args.eval_steps),
         max_steps=int(args.max_steps),
@@ -377,6 +440,9 @@ def main() -> None:
         load_best_model_at_end=False,
         dataloader_num_workers=0,
         seed=int(args.seed),
+        disable_tqdm=bool(args.disable_tqdm),
+        log_level="info",
+        run_name=output_dir.name,
     )
 
     trainer = Trainer(
