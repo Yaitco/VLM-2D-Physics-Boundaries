@@ -14,6 +14,7 @@ PDF_COMPACT_SCHEMA_PATH = ROOT_DIR / 'configs' / 'pdf_protocol_properties.yaml'
 NARROW_CORE_KEYS_PATH = ROOT_DIR / 'configs' / 'narrow_core_property_keys.yaml'
 ABO_NATURAL_BG_V2_SCHEMA_PATH = ROOT_DIR / 'configs' / 'abo_natural_bg_v2_properties.yaml'
 ABO_NATURAL_BG_V2_MAIN_MATERIAL_SCHEMA_PATH = ROOT_DIR / 'configs' / 'abo_natural_bg_v2_main_material_properties.yaml'
+ABO150_NATURAL_BG_V2_TRANSFER_SCHEMA_PATH = ROOT_DIR / 'configs' / 'abo150_natural_bg_v2_transfer_properties.yaml'
 
 
 @dataclass
@@ -212,6 +213,9 @@ def load_protocol_property_specs(
 
     if protocol_name == 'natural_bg_v2_main_material':
         return load_compact_property_specs(ABO_NATURAL_BG_V2_MAIN_MATERIAL_SCHEMA_PATH)
+
+    if protocol_name == 'abo150_natural_bg_v2_transfer':
+        return load_compact_property_specs(ABO150_NATURAL_BG_V2_TRANSFER_SCHEMA_PATH)
 
     raise ValueError(f'Unknown protocol_name: {protocol_name}')
 

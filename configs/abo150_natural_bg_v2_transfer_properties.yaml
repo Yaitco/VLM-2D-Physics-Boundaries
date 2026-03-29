@@ -1,0 +1,52 @@
+properties:
+  material:
+    type: categorical
+    enum:
+      - fabric
+      - wood
+      - stone
+      - plastic
+      - metal
+      - paper
+      - glass
+      - rubber
+      - mixed
+      - unknown
+    description: "Main material mapped from ABO150 to the natural_bg_v2 label space."
+
+  rigidity:
+    type: categorical
+    enum:
+      - rigid
+      - soft
+      - flexible
+      - mixed
+      - unknown
+    description: "Rigidity mapped from ABO150 to the natural_bg_v2 label space."
+
+  transparency:
+    type: categorical
+    enum:
+      - opaque
+      - translucent
+      - transparent
+      - unknown
+    description: "Transparency mapped from ABO150 to the natural_bg_v2 label space."
+
+  surface:
+    type: categorical
+    enum:
+      - smooth
+      - rough
+      - fuzzy
+      - mixed
+      - unknown
+    description: "Surface character mapped from ABO150 to the natural_bg_v2 label space."
+
+  fragility:
+    type: categorical
+    enum:
+      - durable
+      - fragile
+      - unknown
+    description: "Fragility mapped from ABO150 to the natural_bg_v2 label space."

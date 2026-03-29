@@ -167,6 +167,26 @@ def _map_pdf_material(raw_value: Any) -> str:
     return mapping.get(token, 'other')
 
 
+def _map_natural_bg_material(raw_value: Any) -> str:
+    mapping = {
+        'wood': 'wood',
+        'metal': 'metal',
+        'glass': 'glass',
+        'plastic': 'plastic',
+        'fabric': 'fabric',
+        'paper': 'paper',
+        'cardboard': 'paper',
+        'rubber': 'rubber',
+        'stone': 'stone',
+        'ceramic': 'stone',
+        'leather': 'mixed',
+        'composite': 'mixed',
+        'unknown': 'unknown',
+    }
+    token = _normalize_token(str(raw_value)) if raw_value is not None else 'unknown'
+    return mapping.get(token, 'unknown')
+
+
 def _map_pdf_reflectance(raw_value: Any) -> str:
     token = _normalize_token(str(raw_value)) if raw_value is not None else 'unknown'
     if token == 'matte':
@@ -194,6 +214,19 @@ def _map_pdf_rigidity(raw_value: Any) -> str:
     return 'unknown'
 
 
+def _map_natural_bg_rigidity(raw_value: Any) -> str:
+    token = _normalize_token(str(raw_value)) if raw_value is not None else 'unknown'
+    if token == 'rigid':
+        return 'rigid'
+    if token == 'floppy':
+        return 'soft'
+    if token == 'flexible':
+        return 'flexible'
+    if token == 'semi_rigid':
+        return 'flexible'
+    return 'unknown'
+
+
 def _map_pdf_fragility(intrinsic: Dict[str, Any], affordance: Dict[str, Any]) -> str:
     breakable = affordance.get('breakable')
     if isinstance(breakable, bool):
@@ -203,6 +236,34 @@ def _map_pdf_fragility(intrinsic: Dict[str, Any], affordance: Dict[str, Any]) ->
         return 'fragile'
     if token == 'non_brittle':
         return 'not_fragile'
+    return 'unknown'
+
+
+def _map_natural_bg_fragility(intrinsic: Dict[str, Any], affordance: Dict[str, Any]) -> str:
+    breakable = affordance.get('breakable')
+    if isinstance(breakable, bool):
+        return 'fragile' if breakable else 'durable'
+
+    token = _normalize_token(str(intrinsic.get('brittleness_class'))) if intrinsic.get('brittleness_class') is not None else 'unknown'
+    if token in {'brittle', 'very_brittle', 'slightly_brittle'}:
+        return 'fragile'
+    if token == 'non_brittle':
+        return 'durable'
+    return 'unknown'
+
+
+def _map_natural_bg_surface(intrinsic: Dict[str, Any]) -> str:
+    material = _map_natural_bg_material(intrinsic.get('main_material'))
+    roughness = _normalize_token(str(intrinsic.get('surface_roughness_class'))) if intrinsic.get('surface_roughness_class') is not None else 'unknown'
+
+    if material == 'fabric':
+        return 'fuzzy'
+    if material == 'mixed':
+        return 'mixed'
+    if roughness in {'smooth', 'very_smooth'}:
+        return 'smooth'
+    if roughness in {'rough', 'medium', 'very_rough'}:
+        return 'rough'
     return 'unknown'
 
 
@@ -282,6 +343,21 @@ def extract_pdf_protocol_properties(record: Dict[str, Any], property_specs: Dict
     return {key: normalize_value(spec, compact_values.get(key)) for key, spec in property_specs.items()}
 
 
+def extract_natural_bg_v2_transfer_properties(record: Dict[str, Any], property_specs: Dict[str, PropertySpec]) -> Dict[str, Any]:
+    groups = record.get('groups', {}) if isinstance(record.get('groups'), dict) else {}
+    intrinsic = groups.get('intrinsic', {}) if isinstance(groups.get('intrinsic'), dict) else {}
+    affordance = groups.get('affordance', {}) if isinstance(groups.get('affordance'), dict) else {}
+
+    compact_values = {
+        'material': _map_natural_bg_material(intrinsic.get('main_material')),
+        'rigidity': _map_natural_bg_rigidity(intrinsic.get('rigidity_class')),
+        'transparency': _normalize_token(str(intrinsic.get('transparency_class'))) if intrinsic.get('transparency_class') is not None else 'unknown',
+        'surface': _map_natural_bg_surface(intrinsic),
+        'fragility': _map_natural_bg_fragility(intrinsic, affordance),
+    }
+    return {key: normalize_value(spec, compact_values.get(key)) for key, spec in property_specs.items()}
+
+
 def load_abo150_samples(
     annotations_path: Path,
     dataset_dir: Path,
@@ -328,6 +404,8 @@ def load_abo150_samples(
 
             if protocol_name == 'pdf_compact':
                 gt_properties = extract_pdf_protocol_properties(record, property_specs)
+            elif protocol_name == 'abo150_natural_bg_v2_transfer':
+                gt_properties = extract_natural_bg_v2_transfer_properties(record, property_specs)
             else:
                 gt_properties = _extract_gt_properties(record, property_specs)
 
