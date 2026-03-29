@@ -1,0 +1,16 @@
+properties:
+  intrinsic.main_material:
+    type: categorical
+    source_name: material
+    enum:
+      - fabric
+      - wood
+      - stone
+      - plastic
+      - metal
+      - paper
+      - glass
+      - rubber
+      - mixed
+      - unknown
+    description: "Main material category for abo_physics_natural_bg_v2, evaluated with the intrinsic.main_material key."

@@ -13,6 +13,7 @@ from .registry import DatasetContext, ROOT_DIR
 PDF_COMPACT_SCHEMA_PATH = ROOT_DIR / 'configs' / 'pdf_protocol_properties.yaml'
 NARROW_CORE_KEYS_PATH = ROOT_DIR / 'configs' / 'narrow_core_property_keys.yaml'
 ABO_NATURAL_BG_V2_SCHEMA_PATH = ROOT_DIR / 'configs' / 'abo_natural_bg_v2_properties.yaml'
+ABO_NATURAL_BG_V2_MAIN_MATERIAL_SCHEMA_PATH = ROOT_DIR / 'configs' / 'abo_natural_bg_v2_main_material_properties.yaml'
 
 
 @dataclass
@@ -20,6 +21,7 @@ class PropertySpec:
     key: str
     group: str
     name: str
+    source_name: str
     value_type: str  # categorical | boolean | multi_categorical
     allowed_values: List[str]
     description: str
@@ -94,6 +96,7 @@ def load_property_specs(
                     key=key,
                     group=group_name,
                     name=prop_name,
+                    source_name=prop_name,
                     value_type='categorical',
                     allowed_values=allowed,
                     description=desc,
@@ -105,6 +108,7 @@ def load_property_specs(
                     key=key,
                     group=group_name,
                     name=prop_name,
+                    source_name=prop_name,
                     value_type='boolean',
                     allowed_values=['true', 'false', 'unknown'],
                     description=desc,
@@ -120,6 +124,7 @@ def load_property_specs(
                     key=key,
                     group=group_name,
                     name=prop_name,
+                    source_name=prop_name,
                     value_type='multi_categorical',
                     allowed_values=allowed,
                     description=desc,
@@ -173,6 +178,7 @@ def load_compact_property_specs(schema_path: Path) -> Dict[str, PropertySpec]:
             key=str(key),
             group='pdf_compact',
             name=str(key),
+            source_name=str(cfg.get('source_name') or key),
             value_type='categorical',
             allowed_values=allowed,
             description=str(cfg.get('description') or '').strip(),
@@ -203,6 +209,9 @@ def load_protocol_property_specs(
 
     if protocol_name == 'natural_bg_v2':
         return load_compact_property_specs(ABO_NATURAL_BG_V2_SCHEMA_PATH)
+
+    if protocol_name == 'natural_bg_v2_main_material':
+        return load_compact_property_specs(ABO_NATURAL_BG_V2_MAIN_MATERIAL_SCHEMA_PATH)
 
     raise ValueError(f'Unknown protocol_name: {protocol_name}')
 

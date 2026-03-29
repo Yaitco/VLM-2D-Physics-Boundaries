@@ -143,7 +143,7 @@ def _extract_gt_properties(record: Dict[str, Any], property_specs: Dict[str, Pro
     gt: Dict[str, Any] = {}
     for key, spec in property_specs.items():
         group_payload = groups.get(spec.group, {}) if '.' in key else record
-        raw_value = group_payload.get(spec.name) if isinstance(group_payload, dict) else None
+        raw_value = group_payload.get(spec.source_name or spec.name) if isinstance(group_payload, dict) else None
         gt[key] = normalize_value(spec, raw_value)
     return gt
 
@@ -397,7 +397,7 @@ def load_meta_subset_samples(
         if not isinstance(gt_raw, dict):
             gt_raw = {}
         gt_properties = {
-            key: normalize_value(spec, gt_raw.get(spec.name))
+            key: normalize_value(spec, gt_raw.get(spec.source_name or spec.name))
             for key, spec in property_specs.items()
         }
 
