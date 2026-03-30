@@ -1,0 +1,11 @@
+{
+  "name": "natural_bg_v2_transfer_property_manifest",
+  "description": "Property subset for evaluating the ABO150->natural_bg_v2 transfer adapter.",
+  "property_keys": [
+    "material",
+    "rigidity",
+    "transparency",
+    "surface",
+    "fragility"
+  ]
+}
