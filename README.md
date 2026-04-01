@@ -1,352 +1,254 @@
-﻿# Grounding DINO + SAM Carpet Segmentation Experiment
+# VLM-2D-Physics-Boundaries
 
-Этот проект полностью переписан без `SAM 3`.
+Репозиторий курсовой работы по оценке vision-language моделей на задаче извлечения физических свойств объектов из 2D-изображений.
 
-Текущий pipeline строго такой:
+В проекте собраны:
+- единый validation pipeline для `per-property` инференса;
+- zero-shot и few-shot сравнение нескольких VLM;
+- абляции по вариантам визуального входа: `raw`, `mask_overlay`, `masked`;
+- QLoRA-дообучение адаптеров под выбранные группы свойств;
+- служебные скрипты для подготовки subset'ов, масок и ручного review.
 
-- `main_object`: `SAM Automatic Mask Generator -> heuristic mask selection`
-- `class-specific`: `Grounding DINO (text -> box) -> SAM (box -> mask)`
+Основная активная логика живёт в `vlm_pipeline/` и `scripts/`. Папка `src/` содержит старые и вспомогательные сегментационные наработки; это уже не главный entrypoint репозитория.
 
-Поддерживаются 4 метода сегментации:
+## Что именно делает проект
 
-- `main_object`
-- `carpet`
-- `rug`
-- `area_rug`
+Мы рассматриваем задачу так:
+- есть изображение объекта;
+- есть список физических свойств и допустимых значений;
+- модель получает короткий prompt на одно свойство за раз;
+- ответ нормализуется к фиксированному enum/boolean space;
+- дальше считаются `accuracy`, `macro-F1`, `coverage` и вспомогательные метрики.
 
-## Структура проекта
+Такой режим нужен, чтобы:
+- сравнивать разные модели на одной и той же постановке;
+- отдельно смотреть, где модель не знает ответ, а где отвечает неверно;
+- запускать узкие QLoRA-адаптеры под конкретные группы свойств.
+
+## Поддерживаемые датасеты и протоколы
+
+### Датасеты
+- `abo_150_expanded`
+  Небольшой, но богато размеченный subset ABO с широкой ontology свойств. Используется для zero-shot на расширенной схеме и для QLoRA.
+- `abo_physics_natural_bg_v2`
+  Natural-background subset с компактным набором из пяти свойств. Используется как основной benchmark для сравнения моделей и transfer-проверок.
+
+### Протоколы свойств
+- `narrow_core`
+  Узкий набор свойств для быстрых baseline-сравнений.
+- `full_expanded`
+  Полная ontology `abo_150_expanded`.
+- `pdf_compact`
+  Компактный coursework-протокол, полученный через mapping из ABO ontology.
+- `natural_bg_v2`
+  Компактный 5-property протокол для `abo_physics_natural_bg_v2`.
+- `natural_bg_v2_main_material`
+  Узкий протокол только для `main_material`-transfer.
+- `abo150_natural_bg_v2_transfer`
+  ABO150-протокол, схлопнутый в тот же label-space, что и `natural_bg_v2`.
+
+## Поддерживаемые модели
+
+Из коробки в registry есть:
+- `qwen3_vl_8b`
+- `qwen2_5_vl_7b`
+- `qwen2_5_vl_3b`
+- `qwen2_vl_2b`
+- `llava_onevision_1_5_8b`
+
+Все они подключаются через единый runtime layer. Для дообученных моделей можно добавлять кастомный runtime config через `--model-config-path`.
+
+## Варианты визуального входа
+
+- `raw` — исходное изображение;
+- `mask_overlay` — изображение с наложением маски;
+- `masked` — объект, вырезанный по маске на однотонный фон.
+
+Варианты `mask_overlay` и `masked` доступны только если в sample есть `mask_path`.
+
+## Структура репозитория
 
 ```text
-src/
-  models/
-    grounding_dino.py
-    sam_wrapper.py
-  pipelines/
-    main_object_pipeline.py
-    carpet_pipeline.py
-  utils/
-    dataset_update.py
-    metrics.py
-    visualization.py
-    postprocess.py
-  run_experiment.py
+configs/                 схемы свойств и manifests
+Курсовая/                текст курсовой и её служебные артефакты
+dataset/                 локальные датасеты и subsets
+docs/                    инструкции по пайплайну и воспроизведению
+notebooks/               Colab-ноутбуки
+outputs/                 train/eval outputs, adapters, manifests
+scripts/                 CLI entrypoints
+vlm_pipeline/            активное ядро validation pipeline
 ```
 
-## Что делает эксперимент
+Ключевые файлы:
+- [scripts/run_vlm_validation.py](scripts/run_vlm_validation.py)
+- [scripts/build_abo150_qlora_dataset.py](scripts/build_abo150_qlora_dataset.py)
+- [scripts/train_abo150_qlora.py](scripts/train_abo150_qlora.py)
+- [vlm_pipeline/registry.py](vlm_pipeline/registry.py)
+- [vlm_pipeline/specs.py](vlm_pipeline/specs.py)
+- [vlm_pipeline/datasets.py](vlm_pipeline/datasets.py)
 
-Для каждого изображения проект:
+## Требования и реквизиты
 
-1. строит `main_object`-маску через `SamAutomaticMaskGenerator`;
-2. прогоняет `Grounding DINO` для prompt-ов `carpet`, `rug`, `area rug`;
-3. берет лучший bounding box по `dino_score`;
-4. передает box в `SAM SamPredictor` и берет лучшую маску по `sam_score`;
-5. делает post-processing:
-   - удаление маленьких компонент;
-   - заполнение дыр;
-   - morphological closing;
-6. считает метрики при наличии GT:
-   - IoU;
-   - Dice;
-   - Precision;
-   - Recall;
-7. сохраняет:
-   - бинарные маски;
-   - overlay-визуализации;
-   - коллажи;
-   - CSV-таблицы с результатами и аналитикой.
+### Окружение
+Минимально:
+- Python `3.10+`;
+- Linux или Colab;
+- GPU для практического инференса и особенно для QLoRA.
 
-Дополнительно проект умеет обновлять датасет in-place:
+Рекомендации по ресурсам:
+- zero-shot инференс 7B/8B моделей удобнее делать на GPU с 12–16 GB VRAM и выше;
+- QLoRA-дообучение стабильнее запускать на 16–24 GB VRAM и выше;
+- для долгих запусков и выгрузки адаптеров на Hub удобен Google Colab.
 
-- писать выбранную маску в `dataset/.../masks/...`;
-- обновлять `mask_path` и `mask_source` в `meta.json`;
-- сохранять backup `meta.before_grounded_sam.json`;
-- писать `grounded_sam_summary.json`;
-- при желании сохранять preview в `masks_preview/...`.
-
-## Установка
-
-Создай отдельное окружение и установи зависимости:
-
+### Установка
 ```bash
 python -m venv .venv
-.venv\Scripts\activate
+source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Если установка `segment-anything` через `git+https` зависает, установи его вручную:
+### Внешние токены и секреты
+Обязательны не всегда, но на практике полезны:
+- `HF_TOKEN` — если нужны загрузка gated-моделей или push адаптеров на Hugging Face Hub;
+- `HF_USERNAME` — чтобы автоматически собирать `repo_id` для адаптеров;
+- `comet_api_key`, `comet_workspace` — если хочешь логирование в Comet.
 
+### Что должно лежать локально
+Проект ожидает локальные датасеты в `dataset/`. Для встроенных сценариев важны:
+- `dataset/abo_150_expanded`
+- `dataset/abo_physics_natural_bg_v2`
+
+## Быстрый старт: zero-shot валидация
+
+### 1. Запуск на `abo_physics_natural_bg_v2`
 ```bash
-git clone https://github.com/facebookresearch/segment-anything.git
-pip install -e ./segment-anything
+python scripts/run_vlm_validation.py \
+  --dataset-name abo_physics_natural_bg_v2 \
+  --protocol-name natural_bg_v2 \
+  --model-key qwen3_vl_8b \
+  --variants raw \
+  --max-samples 100 \
+  --random-seed 42
 ```
 
-## Модели
-
-### Grounding DINO
-
-В проекте используется `Grounding DINO` через `transformers`, по умолчанию:
-
-- `IDEA-Research/grounding-dino-base`
-
-Модель скачивается автоматически при первом запуске. При желании можно передать локальную директорию вместо model id через `--grounding_model_id`.
-
-### SAM
-
-Нужно заранее скачать checkpoint SAM и либо:
-
-- положить его в `checkpoints/sam_vit_b_01ec64.pth`, либо
-- передать путь через `--sam_checkpoint`.
-
-Пример для `vit_b`:
-
-- файл: `sam_vit_b_01ec64.pth`
-- аргумент: `--sam_model_type vit_b`
-
-## Формат данных
-
-### Изображения
-
-Поддерживаются:
-
-- `.jpg`
-- `.jpeg`
-- `.png`
-- `.bmp`
-- `.webp`
-- `.tif`
-- `.tiff`
-
-### Ground truth
-
-Предполагается, что GT-маска имеет тот же stem, что и изображение.
-
-Пример:
-
-- image: `sample_001.jpg`
-- mask: `sample_001.png`
-
-Если маска не найдена, изображение все равно будет обработано, а метрики останутся пустыми.
-
-## Запуск
-
-### С ground truth
-
+### 2. Запуск на вручную approved subset
 ```bash
-python -m src.run_experiment \
-  --images_dir data/images \
-  --masks_dir data/masks \
-  --output_dir outputs/exp1 \
-  --device cuda
+python scripts/run_vlm_validation.py \
+  --dataset-name abo_physics_natural_bg_v2 \
+  --protocol-name natural_bg_v2 \
+  --model-key qwen3_vl_8b \
+  --variants raw \
+  --meta-override-path dataset/abo_physics_natural_bg_v2/review_outputs/segmentation_review_final_kept_meta.json
 ```
 
-### Без ground truth
-
+### 3. Запуск на `abo_150_expanded`
 ```bash
-python -m src.run_experiment \
-  --images_dir data/images \
-  --output_dir outputs/exp_no_gt \
-  --device cuda
+python scripts/run_vlm_validation.py \
+  --dataset-name abo_150_expanded \
+  --protocol-name narrow_core \
+  --model-key qwen3_vl_8b \
+  --variants raw \
+  --max-samples 50 \
+  --random-seed 42
 ```
 
-### С явным SAM checkpoint
+### Что сохраняется
+Для каждого `model / variant` сохраняются:
+- `per_sample_predictions.csv`
+- `property_metrics.csv`
+- `summary.json`
 
+## Быстрый старт: QLoRA на встроенном ABO150
+
+### 1. Зафиксировать split
 ```bash
-python -m src.run_experiment \
-  --images_dir data/images \
-  --masks_dir data/masks \
-  --output_dir outputs/exp1 \
-  --device cuda \
-  --sam_checkpoint checkpoints/sam_vit_b_01ec64.pth \
-  --sam_model_type vit_b
+python scripts/create_abo150_holdout_split.py
 ```
 
-## Обновление датасета in-place
-
-Если нужно, чтобы новый пайплайн не просто сохранил результаты в `outputs/`, а обновил сам датасет, включи `--update_dataset`.
-
-### Рекомендуемый безопасный режим для mixed-датасета
-
-Для `dataset/abo_physics_natural_bg_v2` безопаснее всего писать обратно `main_object`, потому что датасет смешанный и не все объекты там ковры.
-
+### 2. Построить train/val dataset под выбранные свойства
 ```bash
-python -m src.run_experiment \
-  --images_dir dataset/abo_physics_natural_bg_v2/images \
-  --masks_dir dataset/abo_physics_natural_bg_v2/masks \
-  --output_dir outputs/abo_physics_natural_bg_v2_grounded_sam \
-  --device cuda \
-  --update_dataset \
-  --dataset_dir dataset/abo_physics_natural_bg_v2 \
-  --dataset_update_method main_object \
-  --write_dataset_previews
+python scripts/build_abo150_qlora_dataset.py \
+  --protocol-name full_expanded \
+  --property-keys intrinsic.main_material,intrinsic.transparency_class \
+  --train-ids-path dataset/abo_150_expanded/splits/seed42_val50_train100/train_ids.txt \
+  --val-ids-path dataset/abo_150_expanded/splits/seed42_val50_train100/val_ids.txt \
+  --output-dir outputs/abo150_qwen3_material_transparency_dataset
 ```
 
-Что при этом обновится:
-
-- `dataset/abo_physics_natural_bg_v2/masks/...`
-- `dataset/abo_physics_natural_bg_v2/meta.json`
-- `dataset/abo_physics_natural_bg_v2/meta.before_grounded_sam.json`
-- `dataset/abo_physics_natural_bg_v2/grounded_sam_summary.json`
-- `dataset/abo_physics_natural_bg_v2/masks_preview/...` при `--write_dataset_previews`
-
-Важно:
-
-- если ты указываешь `--masks_dir dataset/.../masks` одновременно с `--update_dataset`, то метрики в `results.csv` будут сравнением новых масок с предыдущими масками датасета, а не с внешним GT;
-- `mask_path` и `mask_source` в `meta.json` будут переписаны на новый результат;
-- предыдущие значения сохраняются в `seg_seed_mask_path` и `seg_seed_mask_source`.
-
-### Другие режимы обновления датасета
-
-Поддерживаются:
-
-- `--dataset_update_method main_object`
-- `--dataset_update_method carpet`
-- `--dataset_update_method rug`
-- `--dataset_update_method area_rug`
-- `--dataset_update_method best_class`
-- `--dataset_update_method best_available`
-
-`best_class` выбирает лучший из `carpet / rug / area_rug` по сочетанию `dino_score`, `sam_score` и ненулевой маски.
-
-## Основные CLI параметры
-
-- `--images_dir`: папка с изображениями
-- `--masks_dir`: папка с GT-масками
-- `--output_dir`: папка с результатами
-- `--device`: `auto`, `cpu`, `cuda`
-- `--grounding_model_id`: Hugging Face model id или локальный путь для Grounding DINO
-- `--sam_checkpoint`: путь к checkpoint SAM
-- `--sam_model_type`: `vit_b`, `vit_l`, `vit_h`
-- `--box_threshold`: threshold для боксов Grounding DINO
-- `--text_threshold`: text threshold для Grounding DINO
-- `--min_component_area`: фильтр маленьких компонент
-- `--closing_kernel_size`: размер ядра closing
-- `--closing_iterations`: число итераций closing
-- `--update_dataset`: включить запись результата обратно в датасет
-- `--dataset_dir`: корень датасета с `meta.json`
-- `--dataset_update_method`: какой метод писать обратно в `mask_path`
-- `--write_dataset_previews`: писать preview в `masks_preview`
-
-## Структура выходов
-
-```text
-outputs/exp1/
-  collages/
-    ...
-  logs/
-    experiment.log
-  masks/
-    main_object/
-    carpet/
-    rug/
-    area_rug/
-  overlays/
-    main_object/
-    carpet/
-    rug/
-    area_rug/
-  tables/
-    results.csv
-    summary_by_method.csv
-    best_prompt_per_image.csv
-    prompt_win_counts.csv
-    main_object_vs_best_class.csv
-    main_object_vs_best_class_summary.csv
-```
-
-## Что есть в `results.csv`
-
-Колонки:
-
-- `image_name`
-- `method`
-- `iou`
-- `dice`
-- `precision`
-- `recall`
-- `mask_area`
-- `area_ratio`
-- `dino_score`
-- `sam_score`
-- `inference_time`
-
-## Аналитика
-
-Проект дополнительно сохраняет:
-
-- `best_prompt_per_image.csv`: какой из prompt-ов `carpet / rug / area rug` дал лучший IoU на каждом изображении;
-- `prompt_win_counts.csv`: какой prompt чаще выигрывает;
-- `main_object_vs_best_class.csv`: сравнение `main_object` против лучшего class-specific результата по каждому изображению;
-- `main_object_vs_best_class_summary.csv`: сводка побед и средних метрик.
-
-## Адаптеры API
-
-Если у `Grounding DINO` или `SAM` изменится API, править нужно изолированные модули:
-
-- `src/models/grounding_dino.py`
-- `src/models/sam_wrapper.py`
-
-Остальной пайплайн от этого не зависит.
-
-## Hint-режим по названиям объектов
-
-Можно включить дополнительный метод `hint`, который берёт текстовую подсказку из `meta.json` и прогоняет её через тот же pipeline `Grounding DINO -> SAM`.
-
-Поддерживаются поля:
-
-- `--hint_field primary_object`
-- `--hint_field product_type`
-- `--hint_field title`
-
-Если выбранное поле пустое, код автоматически пробует другие поддерживаемые поля как fallback. `title` тоже поддерживается, но обычно он шумнее из-за брендов, размеров и многоязычных описаний.
-
-### Обновление датасета без перезаписи базовой маски
-
-Если запустить `--dataset_update_method hint`, результат будет сохранён не в основные поля, а в отдельный hint-слой. Суффикс по умолчанию зависит от поля hint:
-
-- `primary_object` -> `*_hint`
-- `product_type` -> `*_hint_product_type`
-- `title` -> `*_hint_title`
-
-При желании суффикс можно переопределить вручную через `--dataset_field_suffix`.
-
-Типовые поля для title-режима будут такими:
-
-- `mask_path_hint_title`
-- `mask_source_hint_title`
-- `seg_seed_mask_path_hint_title`
-- `seg_seed_mask_source_hint_title`
-- `seg_prompt_mode_hint_title`
-- `seg_selected_method_hint_title`
-- `seg_query_text_hint_title`
-- `seg_box_xyxy_hint_title`
-- `seg_model_name_hint_title`
-- `seg_status_hint_title`
-- `seg_mask_area_ratio_hint_title`
-- `seg_dino_score_hint_title`
-- `seg_sam_score_hint_title`
-- `seg_inference_time_hint_title`
-- `seg_preview_path_hint_title`
-
-Файлы масок и preview при этом по умолчанию пишутся в:
-
-- `dataset/.../masks_hint_title/...`
-- `dataset/.../masks_preview_hint_title/...`
-
-Пример:
-
+### 3. Обучить адаптер
 ```bash
-python -m src.run_experiment \
-  --images_dir dataset/abo_physics_natural_bg_v2/images \
-  --masks_dir dataset/abo_physics_natural_bg_v2/masks \
-  --output_dir outputs/abo_physics_natural_bg_v2_hint_title \
-  --device cuda \
-  --enable_hint_method \
-  --hint_field title \
-  --update_dataset \
-  --dataset_dir dataset/abo_physics_natural_bg_v2 \
-  --dataset_update_method hint \
-  --write_dataset_previews
+python scripts/train_abo150_qlora.py \
+  --train-jsonl outputs/abo150_qwen3_material_transparency_dataset/train.jsonl \
+  --val-jsonl outputs/abo150_qwen3_material_transparency_dataset/val.jsonl \
+  --model-key qwen3_vl_8b \
+  --output-dir outputs/abo150_qwen3_material_transparency \
+  --num-train-epochs 6 \
+  --learning-rate 2e-4 \
+  --gradient-accumulation-steps 8 \
+  --per-device-train-batch-size 1 \
+  --per-device-eval-batch-size 1
 ```
 
+### 4. Провалидировать адаптер
+```bash
+python scripts/run_vlm_validation.py \
+  --dataset-name abo_150_expanded \
+  --protocol-name full_expanded \
+  --sample-ids-path dataset/abo_150_expanded/splits/seed42_val50_train100/val_ids.txt \
+  --model-config-path outputs/abo150_qwen3_material_transparency/runtime_model_config.json \
+  --custom-model-key qwen3_vl_8b_qlora_material_transparency \
+  --property-keys-manifest-path outputs/abo150_qwen3_material_transparency_dataset/manifest.json \
+  --variants raw
+```
 
+## Дообучение и инференс на своих датасетах и своих свойствах
+
+Это поддерживается, но сейчас есть важная оговорка:
+- `train_abo150_qlora.py` уже достаточно общий и принимает любой SFT JSONL в нужном формате;
+- а вот `build_abo150_qlora_dataset.py` и `run_vlm_validation.py` по умолчанию знают только про встроенные датасеты.
+
+Нормальный путь для кастомного проекта такой:
+1. подготовить свой датасет в `meta.json`-формате;
+2. добавить новый `DatasetContext` в [vlm_pipeline/registry.py](vlm_pipeline/registry.py);
+3. описать свои свойства в YAML-конфиге и зарегистрировать новый protocol в [vlm_pipeline/specs.py](vlm_pipeline/specs.py);
+4. для инференса использовать `run_vlm_validation.py`;
+5. для обучения либо расширить dataset builder, либо сразу экспортировать `train.jsonl` / `val.jsonl` в формате, который ждёт [train_abo150_qlora.py](scripts/train_abo150_qlora.py).
+
+Подробная инструкция с шаблонами лежит здесь:
+- [docs/custom_datasets_and_properties.md](docs/custom_datasets_and_properties.md)
+
+## Colab
+
+Готовые ноутбуки:
+- [notebooks/Unified_VLM_Validation_Colab.ipynb](notebooks/Unified_VLM_Validation_Colab.ipynb)
+- [notebooks/ABO150_Qwen3_QLoRA_Colab.ipynb](notebooks/ABO150_Qwen3_QLoRA_Colab.ipynb)
+
+Быстрый runbook:
+- [docs/colab_runbook.md](docs/colab_runbook.md)
+
+## Полезные документы
+
+- [docs/validation_pipeline.md](docs/validation_pipeline.md) — как устроен unified validation pipeline;
+- [docs/abo150_qlora_workflow.md](docs/abo150_qlora_workflow.md) — воспроизводимый QLoRA workflow на ABO150;
+- [docs/custom_datasets_and_properties.md](docs/custom_datasets_and_properties.md) — как завести свои данные и свои свойства;
+- [docs/manual_segmentation_review.md](docs/manual_segmentation_review.md) — ручной review масок;
+- [docs/sam_mask_generation.md](docs/sam_mask_generation.md) — генерация SAM-масок;
+- [docs/abo_natural_background_subset.md](docs/abo_natural_background_subset.md) — подготовка natural background subset.
+
+## Ограничения текущей версии
+
+- `run_vlm_validation.py` по умолчанию ограничен встроенными dataset names в CLI; для нового датасета нужен небольшой registry/config patch.
+- `build_abo150_qlora_dataset.py` ориентирован на `abo_150_expanded`; для кастомного датасета нужно либо адаптировать builder, либо готовить JSONL напрямую.
+- Несколько документов и скриптов вокруг сегментации сохранились как вспомогательные артефакты исследования; основной evaluation loop находится в `vlm_pipeline/`.
+
+## Курсовая и артефакты
+
+- Текст работы: [Курсовая/coursework.pdf](Курсовая/coursework.pdf)
+- Overleaf / teammate bundles: папка [Курсовая](Курсовая)
+
+Если хочется быстро понять, с чего начинать в коде, то лучший маршрут такой:
+1. [scripts/run_vlm_validation.py](scripts/run_vlm_validation.py)
+2. [vlm_pipeline/evaluation.py](vlm_pipeline/evaluation.py)
+3. [vlm_pipeline/datasets.py](vlm_pipeline/datasets.py)
+4. [scripts/train_abo150_qlora.py](scripts/train_abo150_qlora.py)

@@ -213,3 +213,6 @@ RUN_BATCH_GRID = True
 1. оставить базовую модель `qwen3_vl_8b`;
 2. расширить trainset до 2–3 свойств;
 3. все новые adapter-версии сразу пушить на HF Hub, чтобы не путаться в локальных папках.
+
+Если нужен не встроенный ABO150-сценарий, а свои данные и свои свойства, см.:
+- [custom_datasets_and_properties.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/docs/custom_datasets_and_properties.md)

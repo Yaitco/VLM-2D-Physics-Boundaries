@@ -9,6 +9,8 @@ from pathlib import Path
 import sys
 from typing import Any, Dict, List, Sequence
 
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+
 try:
     import comet_ml  # noqa: F401
 except Exception:  # pragma: no cover
@@ -54,6 +56,9 @@ try:
     from huggingface_hub import HfApi
 except Exception:  # pragma: no cover
     HfApi = None
+
+
+TrainerCallbackBase = TrainerCallback if TrainerCallback is not None else object
 
 
 def parse_args() -> argparse.Namespace:
@@ -213,7 +218,7 @@ def _format_metric_value(key: str, value: float) -> str:
     return f"{value:.4f}"
 
 
-class RealtimeMetricsCallback(TrainerCallback):
+class RealtimeMetricsCallback(TrainerCallbackBase):
     def __init__(self, comet_experiment: Any | None = None) -> None:
         self.comet_experiment = comet_experiment
 

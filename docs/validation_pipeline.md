@@ -223,3 +223,4 @@
 - [Unified_VLM_Validation_Colab.ipynb](/home/alexander/Projects/VLM-2D-Physics-Boundaries/notebooks/Unified_VLM_Validation_Colab.ipynb)
 - [run_abo150_smoke.py](/home/alexander/Projects/VLM-2D-Physics-Boundaries/scripts/run_abo150_smoke.py)
 - [colab_runbook.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/docs/colab_runbook.md)
+- [custom_datasets_and_properties.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/docs/custom_datasets_and_properties.md)

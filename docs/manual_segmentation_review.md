@@ -54,6 +54,54 @@ python scripts/review_segmentation_masks.py \
   --start-image-id 51-ZzTmzyPL
 ```
 
+## Второй проход по `review_outputs`
+Если нужно ещё раз пересмотреть уже отобранный subset, можно подать
+в скрипт предыдущий `approved_meta.json` как новый `meta-path` и сохранить
+результат под новым `review-name`.
+
+Пример:
+```bash
+python scripts/review_segmentation_masks.py \
+  --dataset-dir dataset/abo_physics_natural_bg_v2 \
+  --meta-path dataset/abo_physics_natural_bg_v2/review_outputs/segmentation_review_approved_meta.json \
+  --output-dir dataset/abo_physics_natural_bg_v2/review_outputs \
+  --review-name segmentation_review_pass2
+```
+
+На выходе появятся:
+- `segmentation_review_pass2_decisions.json`
+- `segmentation_review_pass2_approved_meta.json`
+- `segmentation_review_pass2_approved_ids.txt`
+
+Именно `segmentation_review_pass2_approved_ids.txt` удобно потом использовать
+для фильтрации CSV-таблиц по `image_id`.
+
+## Фильтр уже одобренного subset
+Если не нужно заново выбирать маску, а нужно просто пройтись по уже
+одобренному subset и решать `оставить / удалить`, используй:
+
+```bash
+python scripts/filter_review_subset.py \
+  --dataset-dir dataset/abo_physics_natural_bg_v2 \
+  --meta-path dataset/abo_physics_natural_bg_v2/review_outputs/segmentation_review_approved_meta.json \
+  --output-dir dataset/abo_physics_natural_bg_v2/review_outputs \
+  --review-name segmentation_review_final
+```
+
+Хоткеи:
+- `K` — оставить
+- `D` — удалить
+- `S` — пропустить
+- `←`, `→` — назад / вперёд
+
+На выходе появятся:
+- `segmentation_review_final_decisions.json`
+- `segmentation_review_final_kept_meta.json`
+- `segmentation_review_final_kept_ids.txt`
+
+Именно `segmentation_review_final_kept_ids.txt` потом удобно использовать
+для фильтрации итоговых таблиц по `image_id`.
+
 ## Хоткеи
 - `1`, `2`, `3` — выбрать вариант маски
 - `A` — одобрить выбранный вариант
