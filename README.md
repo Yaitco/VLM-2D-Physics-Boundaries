@@ -70,13 +70,13 @@
 
 ```text
 configs/                 схемы свойств и manifests
-Курсовая/                текст курсовой и её служебные артефакты
 dataset/                 локальные датасеты и subsets
 docs/                    инструкции по пайплайну и воспроизведению
 notebooks/               Colab-ноутбуки
 outputs/                 train/eval outputs, adapters, manifests
 scripts/                 CLI entrypoints
 vlm_pipeline/            активное ядро validation pipeline
+Coursework.pdf           собранный PDF курсовой
 ```
 
 Ключевые файлы:
@@ -242,10 +242,9 @@ python scripts/run_vlm_validation.py \
 - `build_abo150_qlora_dataset.py` ориентирован на `abo_150_expanded`; для кастомного датасета нужно либо адаптировать builder, либо готовить JSONL напрямую.
 - Несколько документов и скриптов вокруг сегментации сохранились как вспомогательные артефакты исследования; основной evaluation loop находится в `vlm_pipeline/`.
 
-## Курсовая и артефакты
+## Курсовая
 
-- Текст работы: [Курсовая/coursework.pdf](Курсовая/coursework.pdf)
-- Overleaf / teammate bundles: папка [Курсовая](Курсовая)
+- Текст работы: [Coursework.pdf](Coursework.pdf)
 
 Если хочется быстро понять, с чего начинать в коде, то лучший маршрут такой:
 1. [scripts/run_vlm_validation.py](scripts/run_vlm_validation.py)

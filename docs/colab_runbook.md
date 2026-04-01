@@ -9,9 +9,6 @@
 Для отдельного сценария `ABO150 -> QLoRA -> qwen3 -> Hugging Face Hub` есть готовый ноутбук:
 [ABO150_Qwen3_QLoRA_Colab.ipynb](/home/alexander/Projects/VLM-2D-Physics-Boundaries/notebooks/ABO150_Qwen3_QLoRA_Colab.ipynb)
 
-Старые специализированные ноутбуки перенесены в:
-[archive_review/notebooks_legacy](/home/alexander/Projects/VLM-2D-Physics-Boundaries/archive_review/notebooks_legacy)
-
 ## Перед запуском
 
 ### 1. Colab Secrets
@@ -245,4 +242,5 @@ RUN_MULTI_MODEL = False
 
 ## Связанные документы
 - [validation_pipeline.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/docs/validation_pipeline.md)
-- [archive_review/project_notes](/home/alexander/Projects/VLM-2D-Physics-Boundaries/archive_review/project_notes)
+- [abo150_qlora_workflow.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/docs/abo150_qlora_workflow.md)
+- [custom_datasets_and_properties.md](/home/alexander/Projects/VLM-2D-Physics-Boundaries/docs/custom_datasets_and_properties.md)
